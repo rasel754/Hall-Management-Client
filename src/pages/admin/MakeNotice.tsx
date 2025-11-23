@@ -4,20 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { adminService } from "@/services/admin.service";
 import { toast } from "sonner";
-import { Notice } from "@/data/notices";
-import { Send } from "lucide-react";
+import { Send, Loader2 } from "lucide-react";
 
 const MakeNotice = () => {
   const [formData, setFormData] = useState({
     title: "",
     content: "",
-    category: "general" as Notice["category"],
-    expiresAt: "",
   });
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.title || !formData.content) {
@@ -25,16 +23,20 @@ const MakeNotice = () => {
       return;
     }
 
-    toast.success("Notice published successfully", {
-      description: "All students will be notified about this announcement.",
-    });
-
-    setFormData({
-      title: "",
-      content: "",
-      category: "general",
-      expiresAt: "",
-    });
+    setSubmitting(true);
+    try {
+      const response = await adminService.createNotice(formData);
+      if (response.success) {
+        toast.success("Notice published successfully", {
+          description: response.message || "All students will be notified about this announcement.",
+        });
+        setFormData({ title: "", content: "" });
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to publish notice");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -59,6 +61,7 @@ const MakeNotice = () => {
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 placeholder="Enter a clear and concise title"
                 required
+                disabled={submitting}
               />
             </div>
 
@@ -71,44 +74,11 @@ const MakeNotice = () => {
                 placeholder="Provide detailed information about the notice..."
                 rows={6}
                 required
+                disabled={submitting}
               />
               <p className="text-xs text-muted-foreground">
                 Be specific and include all relevant details students need to know.
               </p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="category">Category *</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={(value: Notice["category"]) => setFormData({ ...formData, category: value })}
-                >
-                  <SelectTrigger id="category">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="general">General</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                    <SelectItem value="event">Event</SelectItem>
-                    <SelectItem value="maintenance">Maintenance</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="expiresAt">Expiry Date (Optional)</Label>
-                <Input
-                  id="expiresAt"
-                  type="date"
-                  value={formData.expiresAt}
-                  onChange={(e) => setFormData({ ...formData, expiresAt: e.target.value })}
-                  min={new Date().toISOString().split("T")[0]}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Leave empty for notices without expiration
-                </p>
-              </div>
             </div>
 
             <div className="bg-muted p-4 rounded-lg">
@@ -122,16 +92,24 @@ const MakeNotice = () => {
             </div>
 
             <div className="flex gap-3">
-              <Button type="submit" className="flex-1">
-                <Send className="h-4 w-4 mr-2" />
-                Publish Notice
+              <Button type="submit" className="flex-1" disabled={submitting}>
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Publishing...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Publish Notice
+                  </>
+                )}
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() =>
-                  setFormData({ title: "", content: "", category: "general", expiresAt: "" })
-                }
+                onClick={() => setFormData({ title: "", content: "" })}
+                disabled={submitting}
               >
                 Clear
               </Button>

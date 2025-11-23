@@ -4,42 +4,44 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useRoleStore, Role } from "@/store/useRoleStore";
+import { useRoleStore } from "@/store/useRoleStore";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { authService } from "@/services/auth.service";
+import { Loader2 } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const defaultRole = searchParams.get("role") as Role;
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>(defaultRole || "student");
-  const { setRole: setUserRole } = useRoleStore();
+  const [loading, setLoading] = useState(false);
+  const { setAuth } = useRoleStore();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!email || !password || !role) {
+    if (!email || !password) {
       toast.error("Please fill in all fields");
       return;
     }
 
-    // Mock user data
-    const mockUser = {
-      id: role === "student" ? "1" : "admin1",
-      name: role === "student" ? "John Doe" : "Admin User",
-      email: email,
-      role: role,
-      studentId: role === "student" ? "STU001" : undefined,
-      department: role === "student" ? "Computer Science" : undefined,
-    };
+    setLoading(true);
 
-    setUserRole(role, mockUser);
-    toast.success(`Welcome ${mockUser.name}!`);
-    navigate(role === "student" ? "/student/my-room" : "/admin/overview");
+    try {
+      const response = await authService.login({ email, password });
+      
+      if (response.success) {
+        const { token, user } = response.data;
+        setAuth(token, user);
+        toast.success(`Welcome ${user.name}!`);
+        navigate(user.role === "student" ? "/student/my-room" : "/admin/overview");
+      }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || "Login failed. Please check your credentials.";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -59,19 +61,6 @@ const Login = () => {
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="role">Login As</Label>
-                <Select value={role || ""} onValueChange={(value) => setRole(value as Role)}>
-                  <SelectTrigger id="role">
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="student">Student</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
@@ -80,6 +69,7 @@ const Login = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={loading}
                 />
               </div>
 
@@ -92,17 +82,20 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={loading}
                 />
               </div>
 
-              <Button type="submit" className="w-full">
-                Login
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Logging in...
+                  </>
+                ) : (
+                  "Login"
+                )}
               </Button>
-
-              <div className="text-center text-sm text-muted-foreground">
-                <p>Demo Credentials:</p>
-                <p>Email: any@university.edu | Password: any</p>
-              </div>
             </form>
           </CardContent>
         </Card>

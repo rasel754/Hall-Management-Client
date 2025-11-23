@@ -1,9 +1,8 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { mockStudents } from "@/data/students";
-import { mockRooms } from "@/data/rooms";
-import { mockComplaints } from "@/data/complaints";
-import { mockNotices } from "@/data/notices";
-import { Users, Building, MessageSquare, Bell, TrendingUp } from "lucide-react";
+import { adminService, DashboardStats } from "@/services/admin.service";
+import { Users, Building, MessageSquare, Bell, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 const Overview = () => {
   const totalStudents = mockStudents.length;

@@ -1,30 +1,71 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { mockRoomBookings, RoomBooking } from "@/data/rooms";
+import { adminService } from "@/services/admin.service";
 import { toast } from "sonner";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, XCircle, Loader2 } from "lucide-react";
+
+interface RoomBooking {
+  _id?: string;
+  id?: string;
+  studentName?: string;
+  roomId?: string;
+  roomNumber?: string;
+  status: string;
+  requestDate?: string;
+  createdAt?: string;
+}
 
 const RoomApprovals = () => {
-  const [bookings, setBookings] = useState<RoomBooking[]>(mockRoomBookings);
+  const [bookings, setBookings] = useState<RoomBooking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
-  const handleApprove = (bookingId: string, studentName: string) => {
-    setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, status: "approved" } : b)));
-    toast.success(`Booking approved for ${studentName}`, {
-      description: "The student will be notified via email.",
-    });
+  useEffect(() => {
+    loadRooms();
+  }, []);
+
+  const loadRooms = async () => {
+    try {
+      const response = await adminService.getRooms();
+      if (response.success) {
+        setBookings(response.data || []);
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to load room bookings");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleReject = (bookingId: string, studentName: string) => {
-    setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, status: "rejected" } : b)));
-    toast.error(`Booking rejected for ${studentName}`, {
-      description: "The student will be notified via email.",
-    });
+  const handleApprove = async (roomId: string, studentName: string) => {
+    setApprovingId(roomId);
+    try {
+      const response = await adminService.approveRoom(roomId);
+      if (response.success) {
+        toast.success(`Booking approved${studentName ? ` for ${studentName}` : ""}`, {
+          description: response.message || "The student will be notified via email.",
+        });
+        loadRooms();
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to approve booking");
+    } finally {
+      setApprovingId(null);
+    }
   };
 
-  const pendingBookings = bookings.filter((b) => b.status === "pending");
+  const pendingBookings = bookings.filter((b) => b.status === "pending" || b.status === "Pending");
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -52,56 +93,51 @@ const RoomApprovals = () => {
                   <TableHead>Student Name</TableHead>
                   <TableHead>Room</TableHead>
                   <TableHead>Request Date</TableHead>
-                  <TableHead>Move-in Date</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bookings.map((booking) => (
-                  <TableRow key={booking.id}>
-                    <TableCell className="font-medium">{booking.studentName}</TableCell>
-                    <TableCell>Room {booking.roomId}</TableCell>
-                    <TableCell>{new Date(booking.requestDate).toLocaleDateString()}</TableCell>
-                    <TableCell>{new Date(booking.moveInDate).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          booking.status === "approved"
-                            ? "outline"
-                            : booking.status === "rejected"
-                              ? "destructive"
-                              : "secondary"
-                        }
-                      >
-                        {booking.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {booking.status === "pending" ? (
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => handleApprove(booking.id, booking.studentName)}
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleReject(booking.id, booking.studentName)}
-                          >
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Reject
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">Processed</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {pendingBookings.map((booking) => {
+                  const bookingId = booking._id || booking.id || "";
+                  const isApproving = approvingId === bookingId;
+                  
+                  return (
+                    <TableRow key={bookingId}>
+                      <TableCell className="font-medium">{booking.studentName || "N/A"}</TableCell>
+                      <TableCell>Room {booking.roomNumber || booking.roomId || "N/A"}</TableCell>
+                      <TableCell>
+                        {booking.requestDate 
+                          ? new Date(booking.requestDate).toLocaleDateString()
+                          : booking.createdAt 
+                          ? new Date(booking.createdAt).toLocaleDateString()
+                          : "N/A"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{booking.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          onClick={() => handleApprove(bookingId, booking.studentName || "")}
+                          disabled={isApproving}
+                        >
+                          {isApproving ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              Approving...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Approve
+                            </>
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

@@ -1,32 +1,66 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { mockStudents } from "@/data/students";
-import { Search } from "lucide-react";
+import { adminService } from "@/services/admin.service";
+import { Search, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
+interface Student {
+  _id?: string;
+  id?: string;
+  name: string;
+  email: string;
+  role: string;
+  blocked?: boolean;
+  roomId?: string;
+  createdAt?: string;
+}
 
 const StudentList = () => {
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const filteredStudents = mockStudents.filter(
-    (student) =>
-      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.studentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.department.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "outline";
-      case "blocked":
-        return "destructive";
-      case "pending":
-        return "secondary";
-      default:
-        return "secondary";
+  useEffect(() => {
+    loadStudents();
+  }, []);
+
+  const loadStudents = async () => {
+    try {
+      const response = await adminService.getStudents();
+      if (response.success) {
+        setStudents(response.data || []);
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to load students");
+    } finally {
+      setLoading(false);
     }
   };
+
+  const filteredStudents = students.filter(
+    (student) =>
+      student.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const getStatusColor = (blocked?: boolean) => {
+    return blocked ? "destructive" : "outline";
+  };
+
+  const getStatusText = (blocked?: boolean) => {
+    return blocked ? "Blocked" : "Active";
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -45,7 +79,7 @@ const StudentList = () => {
             <div className="relative w-72">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by name, ID, or department..."
+                placeholder="Search by name or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -57,10 +91,8 @@ const StudentList = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Student ID</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Year</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Room</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Joined Date</TableHead>
@@ -68,16 +100,18 @@ const StudentList = () => {
             </TableHeader>
             <TableBody>
               {filteredStudents.map((student) => (
-                <TableRow key={student.id}>
-                  <TableCell className="font-medium">{student.studentId}</TableCell>
-                  <TableCell>{student.name}</TableCell>
-                  <TableCell>{student.department}</TableCell>
-                  <TableCell>Year {student.year}</TableCell>
+                <TableRow key={student._id || student.id}>
+                  <TableCell className="font-medium">{student.name}</TableCell>
+                  <TableCell>{student.email}</TableCell>
                   <TableCell>{student.roomId ? `Room ${student.roomId}` : "Not assigned"}</TableCell>
                   <TableCell>
-                    <Badge variant={getStatusColor(student.status) as any}>{student.status}</Badge>
+                    <Badge variant={getStatusColor(student.blocked) as any}>
+                      {getStatusText(student.blocked)}
+                    </Badge>
                   </TableCell>
-                  <TableCell>{new Date(student.joinedDate).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    {student.createdAt ? new Date(student.createdAt).toLocaleDateString() : "N/A"}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
