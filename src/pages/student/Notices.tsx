@@ -1,34 +1,38 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { mockNotices } from "@/data/notices";
-import { Bell, AlertCircle, Calendar, Wrench } from "lucide-react";
+import { studentService, Notice } from "@/services/student.service";
+import { Bell, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 const Notices = () => {
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case "urgent":
-        return <AlertCircle className="h-5 w-5" />;
-      case "event":
-        return <Calendar className="h-5 w-5" />;
-      case "maintenance":
-        return <Wrench className="h-5 w-5" />;
-      default:
-        return <Bell className="h-5 w-5" />;
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadNotices();
+  }, []);
+
+  const loadNotices = async () => {
+    try {
+      const response = await studentService.getNotices();
+      if (response.success) {
+        setNotices(response.data || []);
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to load notices");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case "urgent":
-        return "destructive";
-      case "event":
-        return "default";
-      case "maintenance":
-        return "secondary";
-      default:
-        return "outline";
-    }
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -37,7 +41,7 @@ const Notices = () => {
         <p className="text-muted-foreground mt-2">Stay updated with important announcements</p>
       </div>
 
-      {mockNotices.length === 0 ? (
+      {notices.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <Bell className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
@@ -47,31 +51,23 @@ const Notices = () => {
         </Card>
       ) : (
         <div className="space-y-4">
-          {mockNotices.map((notice) => (
-            <Card key={notice.id} className="hover:shadow-md transition-shadow">
+          {notices.map((notice) => (
+            <Card key={notice._id || notice.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      {getCategoryIcon(notice.category)}
+                      <Bell className="h-5 w-5" />
                       <CardTitle>{notice.title}</CardTitle>
                     </div>
-                    <CardDescription className="flex flex-wrap items-center gap-2">
-                      <span>{new Date(notice.createdAt).toLocaleDateString()}</span>
-                      <span>•</span>
-                      <span>By {notice.author}</span>
+                    <CardDescription>
+                      {new Date(notice.createdAt).toLocaleDateString()}
                     </CardDescription>
                   </div>
-                  <Badge variant={getCategoryColor(notice.category) as any}>{notice.category}</Badge>
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-foreground mb-3">{notice.content}</p>
-                {notice.expiresAt && (
-                  <div className="text-xs text-muted-foreground">
-                    Valid until {new Date(notice.expiresAt).toLocaleDateString()}
-                  </div>
-                )}
+                <p className="text-sm text-foreground">{notice.content}</p>
               </CardContent>
             </Card>
           ))}

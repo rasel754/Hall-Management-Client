@@ -1,13 +1,42 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { mockRooms } from "@/data/rooms";
-import { DoorOpen, Users, DollarSign, Wifi, Wind, Bath, BookOpen } from "lucide-react";
+import { studentService, Room } from "@/services/student.service";
+import { DoorOpen, Users, DollarSign, Wifi, Wind, Bath, BookOpen, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 const MyRoom = () => {
-  // Mock: assuming user has room 101
-  const userRoom = mockRooms.find((room) => room.id === "101");
+  const [room, setRoom] = useState<Room | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!userRoom) {
+  useEffect(() => {
+    loadMyRoom();
+  }, []);
+
+  const loadMyRoom = async () => {
+    try {
+      const response = await studentService.getMyRoom();
+      if (response.success && response.data) {
+        setRoom(response.data);
+      }
+    } catch (error: any) {
+      if (error.response?.status !== 404) {
+        toast.error(error.response?.data?.message || "Failed to load room details");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!room) {
     return (
       <div className="space-y-6">
         <div>
@@ -47,8 +76,8 @@ const MyRoom = () => {
             <DoorOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{userRoom.roomNumber}</div>
-            <p className="text-xs text-muted-foreground">{userRoom.building} - Floor {userRoom.floor}</p>
+            <div className="text-2xl font-bold">{room.number}</div>
+            <p className="text-xs text-muted-foreground">Hall Room</p>
           </CardContent>
         </Card>
 
@@ -59,20 +88,24 @@ const MyRoom = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {userRoom.occupied}/{userRoom.capacity}
+              {room.occupied}/{room.capacity}
             </div>
-            <p className="text-xs text-muted-foreground capitalize">{userRoom.type} Room</p>
+            <p className="text-xs text-muted-foreground">Capacity</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Monthly Rent</CardTitle>
+            <CardTitle className="text-sm font-medium">Status</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${userRoom.pricePerMonth}</div>
-            <p className="text-xs text-muted-foreground">Due by 5th of month</p>
+            <div className="text-2xl font-bold">
+              <Badge variant={room.available ? "default" : "secondary"}>
+                {room.available ? "Available" : "Full"}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">Room Status</p>
           </CardContent>
         </Card>
       </div>
@@ -85,36 +118,21 @@ const MyRoom = () => {
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <h4 className="font-semibold mb-2">Location</h4>
+              <h4 className="font-semibold mb-2">Capacity</h4>
               <p className="text-sm text-muted-foreground">
-                Building: {userRoom.building}
+                Total Capacity: {room.capacity}
                 <br />
-                Floor: {userRoom.floor}
+                Currently Occupied: {room.occupied}
                 <br />
-                Room Type: {userRoom.type}
+                Available Spaces: {room.capacity - room.occupied}
               </p>
             </div>
 
             <div>
               <h4 className="font-semibold mb-2">Status</h4>
-              <Badge variant={userRoom.status === "available" ? "default" : "secondary"}>
-                {userRoom.status}
+              <Badge variant={room.available ? "default" : "secondary"}>
+                {room.available ? "Available" : "Full"}
               </Badge>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-3">Amenities</h4>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {userRoom.amenities.map((amenity) => {
-                const Icon = amenityIcons[amenity] || BookOpen;
-                return (
-                  <div key={amenity} className="flex items-center gap-2 text-sm">
-                    <Icon className="h-4 w-4 text-primary" />
-                    <span>{amenity}</span>
-                  </div>
-                );
-              })}
             </div>
           </div>
         </CardContent>

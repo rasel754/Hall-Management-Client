@@ -1,35 +1,74 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { mockPayments } from "@/data/payments";
+import { studentService, Payment } from "@/services/student.service";
 import { toast } from "sonner";
-import { DollarSign, CreditCard } from "lucide-react";
+import { DollarSign, CreditCard, Loader2 } from "lucide-react";
 
-const Payment = () => {
-  const pendingPayment = mockPayments.find((p) => p.status === "pending");
-  const totalPaid = mockPayments
-    .filter((p) => p.status === "paid")
+const PaymentPage = () => {
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [payingId, setPayingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadPayments();
+  }, []);
+
+  const loadPayments = async () => {
+    try {
+      const response = await studentService.getPayments();
+      if (response.success) {
+        setPayments(response.data || []);
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to load payments");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pendingPayment = payments.find((p) => p.status === "Pending");
+  const totalPaid = payments
+    .filter((p) => p.status === "Paid")
     .reduce((sum, p) => sum + p.amount, 0);
 
-  const handlePayNow = (paymentId: string, amount: number) => {
-    toast.success(`Payment of $${amount} processed successfully!`, {
-      description: "Your payment has been recorded. Thank you!",
-    });
+  const handlePayNow = async (paymentId: string, amount: number) => {
+    setPayingId(paymentId);
+    try {
+      const response = await studentService.payRent(paymentId);
+      if (response.success) {
+        toast.success(`Payment of $${amount} processed successfully!`, {
+          description: response.message || "Your payment has been recorded. Thank you!",
+        });
+        loadPayments();
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to process payment");
+    } finally {
+      setPayingId(null);
+    }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "paid":
+      case "Paid":
         return "outline";
-      case "pending":
+      case "Pending":
         return "secondary";
-      case "overdue":
-        return "destructive";
       default:
         return "secondary";
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -58,7 +97,7 @@ const Payment = () => {
           <CardContent>
             <div className="text-2xl font-bold">${pendingPayment?.amount || 0}</div>
             <p className="text-xs text-muted-foreground">
-              {pendingPayment ? `Due by ${new Date(pendingPayment.dueDate).toLocaleDateString()}` : "No pending payments"}
+              {pendingPayment ? `Due payment` : "No pending payments"}
             </p>
           </CardContent>
         </Card>
@@ -68,7 +107,7 @@ const Payment = () => {
         <Card className="border-primary">
           <CardHeader>
             <CardTitle>Pending Payment</CardTitle>
-            <CardDescription>Complete your payment before the due date</CardDescription>
+            <CardDescription>Complete your payment</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-3">
@@ -81,12 +120,23 @@ const Payment = () => {
                 <p className="text-lg font-semibold">{pendingPayment.month}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Due Date</p>
-                <p className="text-lg font-semibold">{new Date(pendingPayment.dueDate).toLocaleDateString()}</p>
+                <p className="text-sm text-muted-foreground">Status</p>
+                <p className="text-lg font-semibold">{pendingPayment.status}</p>
               </div>
             </div>
-            <Button className="w-full" onClick={() => handlePayNow(pendingPayment.id, pendingPayment.amount)}>
-              Pay Now
+            <Button
+              className="w-full"
+              onClick={() => handlePayNow(pendingPayment._id || pendingPayment.id || "", pendingPayment.amount)}
+              disabled={payingId === (pendingPayment._id || pendingPayment.id)}
+            >
+              {payingId === (pendingPayment._id || pendingPayment.id) ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                "Pay Now"
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -104,22 +154,18 @@ const Payment = () => {
                 <TableHead>Month</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead>Paid Date</TableHead>
-                <TableHead>Method</TableHead>
+                <TableHead>Date</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockPayments.map((payment) => (
-                <TableRow key={payment.id}>
+              {payments.map((payment) => (
+                <TableRow key={payment._id || payment.id}>
                   <TableCell className="font-medium">{payment.month}</TableCell>
                   <TableCell>${payment.amount}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(payment.status) as any}>{payment.status}</Badge>
                   </TableCell>
-                  <TableCell>{new Date(payment.dueDate).toLocaleDateString()}</TableCell>
-                  <TableCell>{payment.paidDate ? new Date(payment.paidDate).toLocaleDateString() : "-"}</TableCell>
-                  <TableCell className="capitalize">{payment.method || "-"}</TableCell>
+                  <TableCell>{new Date(payment.createdAt).toLocaleDateString()}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -130,4 +176,4 @@ const Payment = () => {
   );
 };
 
-export default Payment;
+export default PaymentPage;

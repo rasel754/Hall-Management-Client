@@ -1,42 +1,47 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { mockRooms, Room } from "@/data/rooms";
+import { adminService } from "@/services/admin.service";
+import { Building, Users, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Building, Users, DollarSign, Edit } from "lucide-react";
+
+interface Room {
+  _id?: string;
+  id?: string;
+  number: string;
+  capacity: number;
+  occupied: number;
+  available: boolean;
+}
 
 const AvailableRooms = () => {
-  const [rooms, setRooms] = useState<Room[]>(mockRooms);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleStatusChange = (roomId: string) => {
-    setRooms((prev) =>
-      prev.map((r) => {
-        if (r.id === roomId) {
-          const newStatus =
-            r.status === "available" ? "maintenance" : r.status === "maintenance" ? "full" : "available";
-          return { ...r, status: newStatus };
-        }
-        return r;
-      })
-    );
-    toast.success("Room status updated");
-  };
+  useEffect(() => {
+    loadRooms();
+  }, []);
 
-  const getStatusColor = (status: Room["status"]) => {
-    switch (status) {
-      case "available":
-        return "default";
-      case "full":
-        return "secondary";
-      case "maintenance":
-        return "destructive";
-      default:
-        return "secondary";
+  const loadRooms = async () => {
+    try {
+      const response = await adminService.getAvailableRooms();
+      if (response.success) {
+        setRooms(response.data || []);
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to load rooms");
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const stats = [
     {
@@ -46,12 +51,12 @@ const AvailableRooms = () => {
     },
     {
       title: "Available",
-      value: rooms.filter((r) => r.status === "available").length,
+      value: rooms.filter((r) => r.available).length,
       icon: Building,
     },
     {
       title: "Occupied",
-      value: rooms.filter((r) => r.status === "full").length,
+      value: rooms.filter((r) => !r.available).length,
       icon: Users,
     },
   ];
@@ -79,14 +84,16 @@ const AvailableRooms = () => {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {rooms.map((room) => (
-          <Card key={room.id} className="hover:shadow-md transition-shadow">
+          <Card key={room._id || room.id} className="hover:shadow-md transition-shadow">
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle>Room {room.roomNumber}</CardTitle>
-                  <CardDescription>{room.building} - Floor {room.floor}</CardDescription>
+                  <CardTitle>Room {room.number}</CardTitle>
+                  <CardDescription>Hall Room</CardDescription>
                 </div>
-                <Badge variant={getStatusColor(room.status)}>{room.status}</Badge>
+                <Badge variant={room.available ? "default" : "secondary"}>
+                  {room.available ? "Available" : "Full"}
+                </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -94,40 +101,10 @@ const AvailableRooms = () => {
                 <div className="flex items-center gap-2 text-sm">
                   <Users className="h-4 w-4 text-muted-foreground" />
                   <span>
-                    {room.occupied}/{room.capacity} occupied • {room.type}
+                    {room.occupied}/{room.capacity} occupied
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  <span>${room.pricePerMonth}/month</span>
-                </div>
               </div>
-
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Amenities</h4>
-                <div className="flex flex-wrap gap-1">
-                  {room.amenities.slice(0, 2).map((amenity) => (
-                    <Badge key={amenity} variant="outline" className="text-xs">
-                      {amenity}
-                    </Badge>
-                  ))}
-                  {room.amenities.length > 2 && (
-                    <Badge variant="outline" className="text-xs">
-                      +{room.amenities.length - 2}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-
-              <Button
-                variant="outline"
-                className="w-full"
-                size="sm"
-                onClick={() => handleStatusChange(room.id)}
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Change Status
-              </Button>
             </CardContent>
           </Card>
         ))}

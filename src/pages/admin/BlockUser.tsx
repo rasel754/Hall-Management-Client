@@ -1,50 +1,76 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { mockStudents, Student } from "@/data/students";
+import { adminService } from "@/services/admin.service";
 import { toast } from "sonner";
-import { Search } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
+
+interface Student {
+  _id?: string;
+  id?: string;
+  name: string;
+  email: string;
+  blocked?: boolean;
+  roomId?: string;
+}
 
 const BlockUser = () => {
-  const [students, setStudents] = useState<Student[]>(mockStudents);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [blockingId, setBlockingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadStudents();
+  }, []);
+
+  const loadStudents = async () => {
+    try {
+      const response = await adminService.getStudents();
+      if (response.success) {
+        setStudents(response.data || []);
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to load students");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredStudents = students.filter(
     (student) =>
-      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.studentId.toLowerCase().includes(searchTerm.toLowerCase())
+      student.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleToggleBlock = (studentId: string, currentStatus: Student["status"]) => {
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.id === studentId ? { ...s, status: currentStatus === "blocked" ? "active" : "blocked" } : s
-      )
-    );
-
-    const student = students.find((s) => s.id === studentId);
-    const action = currentStatus === "blocked" ? "unblocked" : "blocked";
-
-    toast.success(`${student?.name} has been ${action}`, {
-      description: `Student access has been ${action}.`,
-    });
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "outline";
-      case "blocked":
-        return "destructive";
-      case "pending":
-        return "secondary";
-      default:
-        return "secondary";
+  const handleToggleBlock = async (studentId: string, currentBlocked: boolean, studentName: string) => {
+    setBlockingId(studentId);
+    try {
+      const response = await adminService.blockUser(studentId);
+      if (response.success) {
+        const action = currentBlocked ? "unblocked" : "blocked";
+        toast.success(`${studentName} has been ${action}`, {
+          description: response.message || `Student access has been ${action}.`,
+        });
+        loadStudents();
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to update user status");
+    } finally {
+      setBlockingId(null);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -75,52 +101,45 @@ const BlockUser = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Student ID</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Department</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Room</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Block/Unblock</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredStudents.map((student) => (
-                <TableRow key={student.id}>
-                  <TableCell className="font-medium">{student.studentId}</TableCell>
-                  <TableCell>{student.name}</TableCell>
-                  <TableCell>{student.department}</TableCell>
-                  <TableCell>{student.roomId ? `Room ${student.roomId}` : "Not assigned"}</TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusColor(student.status) as any}>{student.status}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={student.status === "blocked"}
-                        onCheckedChange={() => handleToggleBlock(student.id, student.status)}
-                        disabled={student.status === "pending"}
-                      />
-                      <span className="text-sm text-muted-foreground">
-                        {student.status === "blocked" ? "Blocked" : "Active"}
-                      </span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {filteredStudents.map((student) => {
+                const studentId = student._id || student.id || "";
+                const isBlocking = blockingId === studentId;
+                
+                return (
+                  <TableRow key={studentId}>
+                    <TableCell className="font-medium">{student.name}</TableCell>
+                    <TableCell>{student.email}</TableCell>
+                    <TableCell>{student.roomId ? `Room ${student.roomId}` : "Not assigned"}</TableCell>
+                    <TableCell>
+                      <Badge variant={student.blocked ? "destructive" : "outline"}>
+                        {student.blocked ? "Blocked" : "Active"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={student.blocked || false}
+                          onCheckedChange={() => handleToggleBlock(studentId, student.blocked || false, student.name)}
+                          disabled={isBlocking}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {isBlocking ? "Updating..." : student.blocked ? "Blocked" : "Active"}
+                        </span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-
-      <Card className="border-destructive">
-        <CardHeader>
-          <CardTitle className="text-destructive">Important Notice</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Blocking a user will immediately revoke their access to the portal. They will not be able to log in or
-            access any features until unblocked. Use this feature carefully and only when necessary.
-          </p>
         </CardContent>
       </Card>
     </div>
