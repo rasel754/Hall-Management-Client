@@ -1,18 +1,61 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { adminService, DashboardStats } from "@/services/admin.service";
-import { Users, Building, MessageSquare, Bell, Loader2 } from "lucide-react";
+import { Users, Building, MessageSquare, Bell, Loader2, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
+
+// Define the initial state structure to match the expected DashboardStats interface
+const initialStats: DashboardStats = {
+  totalStudents: 0,
+  activeStudents: 0,
+  totalRooms: 0,
+  availableRooms: 0,
+  pendingComplaints: 0,
+  activeNotices: 0,
+};
 
 const Overview = () => {
-  const totalStudents = mockStudents.length;
-  const activeStudents = mockStudents.filter((s) => s.status === "active").length;
-  const totalRooms = mockRooms.length;
-  const availableRooms = mockRooms.filter((r) => r.status === "available").length;
-  const pendingComplaints = mockComplaints.filter((c) => c.status === "pending").length;
-  const activeNotices = mockNotices.length;
+  const [data, setData] = useState<DashboardStats>(initialStats);
+  const [loading, setLoading] = useState(true);
 
-  const stats = [
+  // Fetch real data from the backend on component mount
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        const response = await adminService.getDashboard();
+
+        // Assuming response.data matches the DashboardStats interface
+        setData(response.data);
+      } catch (error) {
+        // Safe error handling using Axios pattern from previous fixes
+        const errorMessage = (error as any).response?.data?.message || "Failed to load dashboard data.";
+        toast.error(errorMessage);
+        // Fallback to initial state on error
+        setData(initialStats);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []); // Run once on mount
+
+  // Calculate derived stats from the actual fetched data
+  const { totalStudents, activeStudents, totalRooms, availableRooms, pendingComplaints, activeNotices } = data;
+
+  const occupiedRooms = totalRooms - availableRooms;
+
+  // Mock data for Recent Activities (Replace with real API calls if available)
+  const recentActivities = [
+    { id: 1, action: "New student registered", student: "Michael Johnson", time: "2 hours ago" },
+    { id: 2, action: "Room booking approved", student: "Sarah Brown", time: "5 hours ago" },
+    { id: 3, action: "Complaint resolved", student: "John Doe", time: "1 day ago" },
+    { id: 4, action: "Notice published", student: "Admin Office", time: "2 days ago" },
+  ];
+
+  const statsArray = [
     {
       title: "Total Students",
       value: totalStudents,
@@ -43,22 +86,34 @@ const Overview = () => {
     },
   ];
 
-  const recentActivities = [
-    { id: 1, action: "New student registered", student: "Michael Johnson", time: "2 hours ago" },
-    { id: 2, action: "Room booking approved", student: "Sarah Brown", time: "5 hours ago" },
-    { id: 3, action: "Complaint resolved", student: "John Doe", time: "1 day ago" },
-    { id: 4, action: "Notice published", student: "Admin Office", time: "2 days ago" },
-  ];
+  // Render Loading State
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center space-y-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">Loading dashboard data...</p>
+      </div>
+    );
+  }
+
+  // Calculate Occupancy Percentage safely
+  const occupancyPercentage = totalRooms > 0 ? (occupiedRooms / totalRooms) * 100 : 0;
+
 
   return (
-    <div className="space-y-6">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6"
+    >
       <div>
         <h1 className="text-3xl font-bold text-foreground">Dashboard Overview</h1>
         <p className="text-muted-foreground mt-2">Welcome back! Here's what's happening today.</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
+        {statsArray.map((stat) => (
           <Card key={stat.title}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
@@ -104,15 +159,14 @@ const Overview = () => {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">Total Capacity</span>
                   <span className="text-sm font-bold">
-                    {mockRooms.reduce((sum, r) => sum + r.occupied, 0)}/
-                    {mockRooms.reduce((sum, r) => sum + r.capacity, 0)}
+                    {occupiedRooms}/{totalRooms}
                   </span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-2">
                   <div
                     className="bg-primary h-2 rounded-full"
                     style={{
-                      width: `${(mockRooms.reduce((sum, r) => sum + r.occupied, 0) / mockRooms.reduce((sum, r) => sum + r.capacity, 0)) * 100}%`,
+                      width: `${occupancyPercentage}%`,
                     }}
                   />
                 </div>
@@ -126,7 +180,7 @@ const Overview = () => {
                 </div>
                 <div className="text-center p-3 bg-muted rounded-lg">
                   <Building className="h-5 w-5 mx-auto mb-1 text-primary" />
-                  <div className="text-2xl font-bold">{totalRooms - availableRooms}</div>
+                  <div className="text-2xl font-bold">{occupiedRooms}</div>
                   <div className="text-xs text-muted-foreground">Occupied</div>
                 </div>
               </div>
@@ -134,7 +188,7 @@ const Overview = () => {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

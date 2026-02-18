@@ -44,6 +44,7 @@ const adminMenuItems = [
   { title: "Room Approvals", url: "/admin/room-approvals", icon: CheckSquare },
   { title: "Student List", url: "/admin/student-list", icon: Users },
   { title: "Make Notice", url: "/admin/make-notice", icon: PlusCircle },
+  { title: "Hall Management", url: "/admin/halls", icon: Building },
   { title: "Block User", url: "/admin/block-user", icon: UserX },
   { title: "Solve Complaints", url: "/admin/solve-complaints", icon: Wrench },
   { title: "Available Rooms", url: "/admin/available-rooms", icon: Building },
@@ -84,11 +85,10 @@ export function DashboardSidebar() {
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
-                        isActive(item.url)
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent/50"
-                      }`}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${isActive(item.url)
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+                        }`}
                     >
                       <item.icon className="h-5 w-5 flex-shrink-0" />
                       {!isCollapsed && <span>{item.title}</span>}

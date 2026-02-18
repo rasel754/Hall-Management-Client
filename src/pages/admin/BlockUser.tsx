@@ -1,3 +1,13 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +21,12 @@ import { Search, Loader2 } from "lucide-react";
 interface Student {
   _id?: string;
   id?: string;
-  name: string;
+  firstName: string; // Changed from name to firstName
+  lastName?: string; // Added optional lastName
   email: string;
-  blocked?: boolean;
+  role: string; // Added role
+  // blocked?: boolean; // Deprecated or removed in favor of isActive
+  isActive?: boolean;
   roomId?: string;
 }
 
@@ -21,7 +34,18 @@ const BlockUser = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [blockingId, setBlockingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    studentId: string | null;
+    currentStatus: boolean; // true = active, false = inactive
+    studentName: string;
+  }>({
+    open: false,
+    studentId: null,
+    currentStatus: false,
+    studentName: "",
+  });
 
   useEffect(() => {
     loadStudents();
@@ -29,38 +53,72 @@ const BlockUser = () => {
 
   const loadStudents = async () => {
     try {
-      const response = await adminService.getStudents();
-      if (response.success) {
-        setStudents(response.data || []);
+      // Use getAllUsers which we know works in StudentList, or robustly handle getStudents
+      const response = await adminService.getAllUsers();
+
+      let usersData: any[] = [];
+
+      // Handle various response structures (copied logic from StudentList)
+      if (response.data && Array.isArray(response.data.users)) {
+        usersData = response.data.users;
+      } else if (response.data && Array.isArray(response.data)) {
+        usersData = response.data;
+      } else if (response.users && Array.isArray(response.users)) {
+        usersData = response.users;
+      } else if (Array.isArray(response)) {
+        usersData = response;
       }
+
+      // Filter only students
+      const studentsOnly = usersData.filter((user: any) => user.role === 'student');
+      setStudents(studentsOnly);
+
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Failed to load students");
+      setStudents([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredStudents = students.filter(
+  const filteredStudents = Array.isArray(students) ? students.filter(
     (student) =>
-      student.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ) : [];
 
-  const handleToggleBlock = async (studentId: string, currentBlocked: boolean, studentName: string) => {
-    setBlockingId(studentId);
+  const initiateToggle = (studentId: string, currentStatus: boolean, studentName: string) => {
+    setConfirmDialog({
+      open: true,
+      studentId,
+      currentStatus,
+      studentName,
+    });
+  };
+
+  const handleConfirmToggle = async () => {
+    const { studentId, currentStatus, studentName } = confirmDialog;
+    if (!studentId) return;
+
+    setConfirmDialog((prev) => ({ ...prev, open: false }));
+    setTogglingId(studentId);
+
     try {
-      const response = await adminService.blockUser(studentId);
-      if (response.success) {
-        const action = currentBlocked ? "unblocked" : "blocked";
-        toast.success(`${studentName} has been ${action}`, {
-          description: response.message || `Student access has been ${action}.`,
-        });
-        loadStudents();
-      }
+      // If currently active, we want to deactivate. If currently inactive, we activate.
+      const response = currentStatus
+        ? await adminService.deactivateUser(studentId)
+        : await adminService.activateUser(studentId);
+
+      const action = currentStatus ? "deactivated" : "activated";
+      toast.success(`${studentName} has been ${action}`, {
+        description: `Student access has been ${action}.`,
+      });
+      loadStudents();
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Failed to update user status");
     } finally {
-      setBlockingId(null);
+      setTogglingId(null);
     }
   };
 
@@ -75,7 +133,7 @@ const BlockUser = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Block/Unblock Users</h1>
+        <h1 className="text-3xl font-bold text-foreground">User Management</h1>
         <p className="text-muted-foreground mt-2">Manage student access to the system</p>
       </div>
 
@@ -105,33 +163,35 @@ const BlockUser = () => {
                 <TableHead>Email</TableHead>
                 <TableHead>Room</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Block/Unblock</TableHead>
+                <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredStudents.map((student) => {
                 const studentId = student._id || student.id || "";
-                const isBlocking = blockingId === studentId;
-                
+                const isToggling = togglingId === studentId;
+                const isActive = student.isActive !== false;
+                const fullName = `${student.firstName} ${student.lastName || ''}`.trim();
+
                 return (
                   <TableRow key={studentId}>
-                    <TableCell className="font-medium">{student.name}</TableCell>
+                    <TableCell className="font-medium">{fullName}</TableCell>
                     <TableCell>{student.email}</TableCell>
                     <TableCell>{student.roomId ? `Room ${student.roomId}` : "Not assigned"}</TableCell>
                     <TableCell>
-                      <Badge variant={student.blocked ? "destructive" : "outline"}>
-                        {student.blocked ? "Blocked" : "Active"}
+                      <Badge variant={isActive ? "outline" : "destructive"}>
+                        {isActive ? "Active" : "Deactivated"}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Switch
-                          checked={student.blocked || false}
-                          onCheckedChange={() => handleToggleBlock(studentId, student.blocked || false, student.name)}
-                          disabled={isBlocking}
+                          checked={isActive}
+                          onCheckedChange={() => initiateToggle(studentId, isActive, fullName)}
+                          disabled={isToggling}
                         />
                         <span className="text-sm text-muted-foreground">
-                          {isBlocking ? "Updating..." : student.blocked ? "Blocked" : "Active"}
+                          {isToggling ? "Updating..." : isActive ? "Active" : "Deactivated"}
                         </span>
                       </div>
                     </TableCell>
@@ -142,6 +202,34 @@ const BlockUser = () => {
           </Table>
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will {confirmDialog.currentStatus ? "deactivate" : "activate"} access for <strong>{confirmDialog.studentName}</strong>.
+              {confirmDialog.currentStatus
+                ? " They will no longer be able to log in."
+                : " They will regain access to the portal."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmToggle}
+              className={confirmDialog.currentStatus ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+            >
+              {confirmDialog.currentStatus ? "Deactivate" : "Activate"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

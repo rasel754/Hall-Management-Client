@@ -8,20 +8,42 @@ import { toast } from "sonner";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 interface RoomBooking {
-  _id?: string;
-  id?: string;
-  studentName?: string;
-  roomId?: string;
-  roomNumber?: string;
+  _id: string;
+  studentId?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    studentId?: string;
+  };
+  roomId?: {
+    roomNumber?: string;
+    floor?: number;
+  };
+  hallId?: {
+    name?: string;
+  };
   status: string;
+  startDate?: string;
   requestDate?: string;
   createdAt?: string;
 }
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const RoomApprovals = () => {
   const [bookings, setBookings] = useState<RoomBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [bookingToApprove, setBookingToApprove] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     loadRooms();
@@ -29,23 +51,41 @@ const RoomApprovals = () => {
 
   const loadRooms = async () => {
     try {
-      const response = await adminService.getRooms();
-      if (response.success) {
-        setBookings(response.data || []);
+      const response = await adminService.getRoomBookings();
+
+
+      let bookingsData: RoomBooking[] = [];
+
+      // Handle various response structures
+      if (response?.data?.bookings && Array.isArray(response.data.bookings)) {
+        bookingsData = response.data.bookings;
+      } else if (Array.isArray(response?.data)) {
+        bookingsData = response.data;
+      } else if (Array.isArray(response)) {
+        bookingsData = response;
       }
+
+      setBookings(bookingsData);
     } catch (error: any) {
+      console.error('Error loading rooms:', error);
       toast.error(error.response?.data?.message || "Failed to load room bookings");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleApprove = async (roomId: string, studentName: string) => {
-    setApprovingId(roomId);
+  const initiateApprove = (bookingId: string, studentName: string) => {
+    setBookingToApprove({ id: bookingId, name: studentName });
+  };
+
+  const handleApprove = async () => {
+    if (!bookingToApprove) return;
+
+    setApprovingId(bookingToApprove.id);
     try {
-      const response = await adminService.approveRoom(roomId);
+      const response = await adminService.approveRoomBooking(bookingToApprove.id);
       if (response.success) {
-        toast.success(`Booking approved${studentName ? ` for ${studentName}` : ""}`, {
+        toast.success(`Booking approved${bookingToApprove.name ? ` for ${bookingToApprove.name}` : ""}`, {
           description: response.message || "The student will be notified via email.",
         });
         loadRooms();
@@ -54,6 +94,7 @@ const RoomApprovals = () => {
       toast.error(error.response?.data?.message || "Failed to approve booking");
     } finally {
       setApprovingId(null);
+      setBookingToApprove(null);
     }
   };
 
@@ -99,19 +140,24 @@ const RoomApprovals = () => {
               </TableHeader>
               <TableBody>
                 {pendingBookings.map((booking) => {
-                  const bookingId = booking._id || booking.id || "";
+                  const bookingId = booking._id;
                   const isApproving = approvingId === bookingId;
-                  
+                  const studentName = booking.studentId ? `${booking.studentId.firstName} ${booking.studentId.lastName}` : "Unknown Student";
+                  const roomNumber = booking.roomId?.roomNumber || "N/A";
+
                   return (
                     <TableRow key={bookingId}>
-                      <TableCell className="font-medium">{booking.studentName || "N/A"}</TableCell>
-                      <TableCell>Room {booking.roomNumber || booking.roomId || "N/A"}</TableCell>
+                      <TableCell className="font-medium">
+                        <div>{studentName}</div>
+                        <div className="text-xs text-muted-foreground">{booking.studentId?.email}</div>
+                      </TableCell>
+                      <TableCell>Room {roomNumber}</TableCell>
                       <TableCell>
-                        {booking.requestDate 
-                          ? new Date(booking.requestDate).toLocaleDateString()
-                          : booking.createdAt 
-                          ? new Date(booking.createdAt).toLocaleDateString()
-                          : "N/A"}
+                        {booking.startDate
+                          ? new Date(booking.startDate).toLocaleDateString()
+                          : booking.createdAt
+                            ? new Date(booking.createdAt).toLocaleDateString()
+                            : "N/A"}
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{booking.status}</Badge>
@@ -119,7 +165,7 @@ const RoomApprovals = () => {
                       <TableCell>
                         <Button
                           size="sm"
-                          onClick={() => handleApprove(bookingId, booking.studentName || "")}
+                          onClick={() => initiateApprove(bookingId, studentName)}
                           disabled={isApproving}
                         >
                           {isApproving ? (
@@ -143,6 +189,24 @@ const RoomApprovals = () => {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!bookingToApprove} onOpenChange={(open) => !open && setBookingToApprove(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Approve Booking Request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will approve the room booking for <span className="font-medium text-foreground">{bookingToApprove?.name}</span>.
+              The student will be notified and the room status will be updated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleApprove} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              Confirm Approval
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

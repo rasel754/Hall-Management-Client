@@ -17,40 +17,65 @@ import { toast } from "sonner";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
 const CancelSeat = () => {
-  const [room, setRoom] = useState<Room | null>(null);
+  const [activeBooking, setActiveBooking] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [cancelled, setCancelled] = useState(false);
 
   useEffect(() => {
-    loadMyRoom();
+    loadBookingInfo();
   }, []);
 
-  const loadMyRoom = async () => {
+  const loadBookingInfo = async () => {
     try {
-      const response = await studentService.getMyRoom();
-      if (response.success && response.data) {
-        setRoom(response.data);
+      // Fetch bookings to find active or pending ones
+      const response = await studentService.getBookings();
+      let bookingsData: any[] = [];
+
+      if (Array.isArray(response)) {
+        bookingsData = response;
+      } else if (response?.data?.bookings && Array.isArray(response.data.bookings)) {
+        bookingsData = response.data.bookings;
+      } else if (response?.data && Array.isArray(response.data)) {
+        bookingsData = response.data;
+      } else if (response?.bookings && Array.isArray(response.bookings)) {
+        bookingsData = response.bookings;
+      } else if (response?.result && Array.isArray(response.result)) {
+        bookingsData = response.result;
       }
+
+      // Prioritize identifying 'approved' bookings, then 'pending'
+      const foundBooking = bookingsData.find(b => ['approved', 'pending'].includes(b.status));
+
+      if (foundBooking) {
+        setActiveBooking(foundBooking);
+      } else {
+        setActiveBooking(null);
+      }
+
     } catch (error) {
-      // No room assigned
+      console.error("Failed to load booking info", error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCancelSeat = async () => {
+    if (!activeBooking) return;
+
     setCancelling(true);
     try {
-      const response = await studentService.cancelSeat();
-      if (response.success) {
-        setCancelled(true);
-        toast.success("Seat cancellation request submitted", {
-          description: response.message || "Your request will be processed within 2-3 business days.",
-        });
-      }
+      // Use the specific booking ID cancellation
+      await studentService.cancelBooking(activeBooking._id);
+
+      setCancelled(true);
+      setActiveBooking(null); // Clear active booking
+      toast.success("Booking cancelled successfully", {
+        description: "Your room booking has been cancelled.",
+      });
+
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to cancel seat");
+      toast.error(error.response?.data?.message || "Failed to cancel booking");
     } finally {
       setCancelling(false);
     }
@@ -64,7 +89,7 @@ const CancelSeat = () => {
     );
   }
 
-  if (!room || cancelled) {
+  if (!activeBooking && !cancelled) {
     return (
       <div className="space-y-6">
         <div>
@@ -75,19 +100,40 @@ const CancelSeat = () => {
         <Card>
           <CardContent className="p-12 text-center">
             <AlertTriangle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">
-              {cancelled ? "Cancellation Request Submitted" : "No Active Booking"}
-            </h3>
+            <h3 className="text-xl font-semibold mb-2">No Active Booking</h3>
             <p className="text-muted-foreground">
-              {cancelled
-                ? "Your seat cancellation request has been submitted and is under review."
-                : "You don't have an active room booking to cancel."}
+              You don't have an active or pending room booking to cancel.
             </p>
           </CardContent>
         </Card>
       </div>
     );
   }
+
+  if (cancelled) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Cancel Seat</h1>
+          <p className="text-muted-foreground mt-2">Cancel your current room booking</p>
+        </div>
+
+        <Card>
+          <CardContent className="p-12 text-center">
+            <AlertTriangle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Cancellation Successful</h3>
+            <p className="text-muted-foreground">
+              Your booking has been cancelled successfully.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const roomNumber = activeBooking?.roomId?.roomNumber || "N/A";
+  const hallName = activeBooking?.hallId?.name || "Student Hall";
+  const status = activeBooking?.status || "Unknown";
 
   return (
     <div className="space-y-6">
@@ -98,20 +144,27 @@ const CancelSeat = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Current Room Details</CardTitle>
-          <CardDescription>Information about your current room booking</CardDescription>
+          <CardTitle>Current Booking Details</CardTitle>
+          <CardDescription>Information about your {status} booking</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <p className="text-sm text-muted-foreground">Room Number</p>
-              <p className="text-lg font-semibold">{room.number}</p>
+              <p className="text-lg font-semibold">{roomNumber}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Capacity</p>
-              <p className="text-lg font-semibold">
-                {room.occupied}/{room.capacity}
-              </p>
+              <p className="text-sm text-muted-foreground">Hall</p>
+              <p className="text-lg font-semibold">{hallName}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Status</p>
+              <div className="mt-1">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                  {status.toUpperCase()}
+                </span>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -129,7 +182,7 @@ const CancelSeat = () => {
             <div className="bg-muted p-4 rounded-lg">
               <h4 className="font-semibold mb-2">Cancellation Terms:</h4>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li>You must vacate the room within 7 days of approval</li>
+                <li>You must vacate the room within 7 days of approval (if occupied)</li>
                 <li>No refund will be provided for the current month</li>
                 <li>Security deposit will be refunded within 30 days</li>
                 <li>You will need to clear all dues before vacating</li>
@@ -153,7 +206,7 @@ const CancelSeat = () => {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This action will cancel your current room booking. You will need to submit a new booking request if
+                    This action will cancel your current room booking ({roomNumber}). You will need to submit a new booking request if
                     you want to get a room again. This action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>

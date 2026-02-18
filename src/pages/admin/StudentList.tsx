@@ -10,7 +10,7 @@ import { toast } from "sonner";
 interface Student {
   _id?: string;
   id?: string;
-  name: string;
+  firstName: string;
   email: string;
   role: string;
   blocked?: boolean;
@@ -29,11 +29,31 @@ const StudentList = () => {
 
   const loadStudents = async () => {
     try {
-      const response = await adminService.getStudents();
-      if (response.success) {
-        setStudents(response.data || []);
+      const response = await adminService.getAllUsers();
+
+
+      let usersData: Student[] = [];
+
+      // Handle various response structures
+      if (response.data && Array.isArray(response.data.users)) {
+        // Structure: { data: { users: [...] } }
+        usersData = response.data.users;
+      } else if (response.data && Array.isArray(response.data)) {
+        // Structure: { data: [...] }
+        usersData = response.data;
+      } else if (response.users && Array.isArray(response.users)) {
+        // Structure: { users: [...] }
+        usersData = response.users;
+      } else if (Array.isArray(response)) {
+        // Structure: [...]
+        usersData = response;
       }
+
+      // Filter only students
+      const studentsOnly = usersData.filter((user: Student) => user.role === 'student');
+      setStudents(studentsOnly);
     } catch (error: any) {
+      console.error("Error fetching students:", error);
       toast.error(error.response?.data?.message || "Failed to load students");
     } finally {
       setLoading(false);
@@ -42,7 +62,7 @@ const StudentList = () => {
 
   const filteredStudents = students.filter(
     (student) =>
-      student.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -101,7 +121,7 @@ const StudentList = () => {
             <TableBody>
               {filteredStudents.map((student) => (
                 <TableRow key={student._id || student.id}>
-                  <TableCell className="font-medium">{student.name}</TableCell>
+                  <TableCell className="font-medium">{student.firstName}</TableCell>
                   <TableCell>{student.email}</TableCell>
                   <TableCell>{student.roomId ? `Room ${student.roomId}` : "Not assigned"}</TableCell>
                   <TableCell>

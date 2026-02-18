@@ -1,31 +1,65 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useRoleStore } from "@/store/useRoleStore";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Camera } from "lucide-react";
+import { studentService } from "@/services/student.service";
 
 const EditProfile = () => {
-  const { user } = useRoleStore();
+  const { user, setAuth } = useRoleStore();
+  const [loading, setLoading] = useState(false);
+
   const [formData, setFormData] = useState({
-    name: user?.name || "",
-    email: user?.email || "",
-    studentId: user?.studentId || "",
-    department: user?.department || "",
-    phone: "+1 234 567 8901",
-    address: "123 University Street, Campus Area",
-    emergencyContact: "+1 234 567 8902",
-    bio: "Computer Science student passionate about technology and innovation.",
+    firstName: "",
+    lastName: "",
+    email: "",
+    studentId: "",
+    phoneNumber: "",
+    address: "",
   });
 
-  const handleSave = () => {
-    toast.success("Profile updated successfully", {
-      description: "Your profile information has been saved.",
-    });
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+        studentId: user.studentId || "",
+        phoneNumber: user.phoneNumber || "",
+        address: user.address || "",
+      });
+    }
+  }, [user]);
+
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+      const updatedUser = await studentService.updateProfile({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phoneNumber: formData.phoneNumber,
+        address: formData.address,
+      });
+
+      // Update local store with new data while preserving token and existing user data (like role)
+      if (user) {
+        setAuth(localStorage.getItem('token') || '', { ...user, ...updatedUser });
+      }
+
+      toast.success("Profile updated successfully", {
+        description: "Your profile information has been saved.",
+      });
+    } catch (error: any) {
+      toast.error("Failed to update profile", {
+        description: error.response?.data?.message || "Something went wrong",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -46,11 +80,8 @@ const EditProfile = () => {
               <Avatar className="h-32 w-32">
                 <AvatarImage src={user?.avatar} />
                 <AvatarFallback className="bg-primary text-primary-foreground text-3xl">
-                  {user?.name
-                    ?.split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .toUpperCase()}
+                  {formData.firstName?.[0]?.toUpperCase()}
+                  {formData.lastName?.[0]?.toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <Button
@@ -75,11 +106,20 @@ const EditProfile = () => {
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
+                <Label htmlFor="firstName">First Name</Label>
                 <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  id="firstName"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Last Name</Label>
+                <Input
+                  id="lastName"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                 />
               </div>
 
@@ -89,21 +129,18 @@ const EditProfile = () => {
                   id="email"
                   type="email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  disabled
+                  className="bg-muted"
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="studentId">Student ID</Label>
-                <Input id="studentId" value={formData.studentId} disabled />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="department">Department</Label>
                 <Input
-                  id="department"
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  id="studentId"
+                  value={formData.studentId}
+                  disabled
+                  className="bg-muted"
                 />
               </div>
 
@@ -112,18 +149,8 @@ const EditProfile = () => {
                 <Input
                   id="phone"
                   type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="emergency">Emergency Contact</Label>
-                <Input
-                  id="emergency"
-                  type="tel"
-                  value={formData.emergencyContact}
-                  onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
+                  value={formData.phoneNumber}
+                  onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                 />
               </div>
             </div>
@@ -137,19 +164,10 @@ const EditProfile = () => {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="bio">Bio</Label>
-              <Textarea
-                id="bio"
-                value={formData.bio}
-                onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                rows={3}
-              />
-            </div>
-
             <div className="flex gap-3 pt-4">
-              <Button onClick={handleSave}>Save Changes</Button>
-              <Button variant="outline">Cancel</Button>
+              <Button onClick={handleSave} disabled={loading}>
+                {loading ? "Saving..." : "Save Changes"}
+              </Button>
             </div>
           </CardContent>
         </Card>

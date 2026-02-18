@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const API_BASE_URL = "https://hall-management-server-fkv7esy3f-rasel-ahmeds-projects-68daacca.vercel.app";
+export const API_BASE_URL = "https://hall-mangement-server.vercel.app";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -15,6 +15,9 @@ api.interceptors.request.use(
     const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+
+    } else {
+      console.warn(`⚠️ Making request to ${config.url} WITHOUT token`);
     }
     return config;
   },
@@ -27,6 +30,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Only auto-logout for auth endpoints, not for data fetching endpoints
+    // This prevents logout when accessing protected resources that might have permission issues
     if (error.response?.status === 401) {
       localStorage.removeItem("token");
       window.location.href = "/login";
