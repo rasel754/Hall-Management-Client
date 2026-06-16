@@ -18,7 +18,7 @@ export const DashboardLayout = ({ children, requiredRole }: DashboardLayoutProps
   }
 
   if (requiredRole && role !== requiredRole) {
-    return <Navigate to={`/${role}/dashboard`} replace />;
+    return <Navigate to={`/dashboard/${role}/overview`} replace />;
   }
 
   return (

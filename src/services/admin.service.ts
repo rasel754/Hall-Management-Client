@@ -215,6 +215,11 @@ export const adminService = {
     return response.data;
   },
 
+  rejectRoomBooking: async (id: string) => {
+    const response = await api.patch(`/api/bookings/${id}/approve`, { status: "rejected" });
+    return response.data;
+  },
+
   getAllNotices: async () => {
     const response = await api.get("/api/notices");
     return response.data;

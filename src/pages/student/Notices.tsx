@@ -1,164 +1,174 @@
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import React, { useEffect, useState, useMemo } from "react";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { studentService, Notice } from "@/services/student.service";
-import { Bell, Loader2, AlertCircle, User } from "lucide-react";
-import { toast } from "sonner";
+import { Loader2, Bell, Calendar, User, Eye } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
-const Notices = () => {
+export default function StudentNotices() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
+  const [readerNotice, setReaderNotice] = useState<Notice | null>(null);
 
   useEffect(() => {
-    loadNotices();
+    const fetchNotices = async () => {
+      try {
+        const res = await studentService.getNotices();
+        setNotices(res.data || res || []);
+      } catch (err) {
+        console.error("Failed to load notices", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchNotices();
   }, []);
 
-  const loadNotices = async () => {
-    try {
-      const response = await studentService.getNotices();
-
-
-      if (response.success || response) {
-        // Handle various response structures:
-        // 1. response.data.notices (standard)
-        // 2. response.notices (direct)
-        // 3. response.data (array directly in data)
-        const rawNotices = response.data?.notices || response.notices || response.data || [];
-
-
-
-        // Filter only active notices intended for students
-        const activeNotices = Array.isArray(rawNotices)
-          ? rawNotices.filter((notice: Notice) => {
-            const isTargetingStudent = notice.targetAudience?.includes('student');
-            const isActive = notice.isActive;
-            return isActive && isTargetingStudent;
-          })
-          : [];
-
-
-        setNotices(activeNotices);
-      }
-    } catch (error: any) {
-      console.error("❌ Error loading notices:", error);
-      toast.error("Failed to Load Notices", {
-        description: error.response?.data?.message || "Unable to fetch notices at this time.",
-        icon: <AlertCircle className="h-4 w-4" />,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getPriorityVariant = (priority: string): "default" | "secondary" | "destructive" | "outline" => {
-    switch (priority) {
-      case 'urgent': return 'destructive';
-      case 'high': return 'default';
-      case 'medium': return 'secondary';
-      case 'low': return 'outline';
-      default: return 'secondary';
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'urgent': return 'border-l-4 border-l-red-500';
-      case 'high': return 'border-l-4 border-l-orange-500';
-      case 'medium': return 'border-l-4 border-l-blue-500';
-      case 'low': return 'border-l-4 border-l-gray-400';
-      default: return '';
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-          <p className="text-sm text-muted-foreground">Loading notices...</p>
-        </div>
-      </div>
+  // Filter Logic
+  const filteredNotices = useMemo(() => {
+    if (!selectedCategory || selectedCategory === "ALL") return notices;
+    return notices.filter(
+      (n) => String(n.priority || "").toLowerCase() === selectedCategory.toLowerCase()
     );
-  }
+  }, [notices, selectedCategory]);
+
+  const categories = [
+    { label: "All Notices", value: "ALL" },
+    { label: "Urgent Board", value: "urgent" },
+    { label: "Maintenance", value: "medium" }, // maps to medium/low priorities in notice schemas
+    { label: "General Updates", value: "low" },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Notice Board</h1>
-        <p className="text-muted-foreground mt-2">Stay updated with important announcements</p>
+    <div className="space-y-6 animate-fade-in">
+      <PageHeader
+        title="Check Notice Board"
+        subtitle="Stay updated with official residence hall circulars, sports schedules, and academic updates."
+      />
+
+      {/* Categories panel */}
+      <div className="flex gap-2 flex-wrap pb-2 border-b border-border">
+        {categories.map((cat) => (
+          <Button
+            key={cat.value}
+            variant={selectedCategory === cat.value ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSelectedCategory(cat.value)}
+            className="rounded-lg text-xs"
+          >
+            {cat.label}
+          </Button>
+        ))}
       </div>
 
-      {notices.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <Bell className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No Notices</h3>
-            <p className="text-muted-foreground">There are no active notices at the moment.</p>
-          </CardContent>
-        </Card>
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Card className="p-12"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" /></Card>
+        </div>
+      ) : filteredNotices.length === 0 ? (
+        <EmptyState
+          icon={Bell}
+          title="No notices found"
+          description="There are currently no announcements posted under this priority category."
+        />
       ) : (
-        <div className="space-y-4">
-          {notices.map((notice) => (
-            <Card
-              key={notice._id || notice.id}
-              className={`hover:shadow-md transition-shadow ${getPriorityColor(notice.priority)}`}
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Bell className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-lg">{notice.title}</CardTitle>
-                      <Badge variant={getPriorityVariant(notice.priority)} className="uppercase text-xs">
-                        {notice.priority}
-                      </Badge>
-                    </div>
-                    <CardDescription className="flex items-center gap-2">
-                      <span>{formatDate(notice.createdAt)}</span>
-                      {notice.createdBy && (
-                        <>
-                          <span>•</span>
-                          <span className="flex items-center gap-1">
-                            <User className="h-3 w-3" />
-                            {notice.createdBy.firstName} {notice.createdBy.lastName}
-                          </span>
-                        </>
-                      )}
-                    </CardDescription>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredNotices.map((n) => {
+            const authorName = n.createdBy
+              ? `${n.createdBy.firstName} ${n.createdBy.lastName}`
+              : "Hall Provost Office";
+            return (
+              <Card
+                key={n._id || n.id}
+                className="border-border bg-card shadow-md rounded-xl overflow-hidden flex flex-col justify-between hover:shadow-lg transition-shadow"
+              >
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+                    <StatusBadge status={n.priority === "urgent" ? "rejected" : n.priority === "high" ? "warning" : "general"} />
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(n.createdAt).toLocaleDateString()}
+                    </span>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                  {notice.content}
-                </p>
-                {notice.targetAudience && notice.targetAudience.length > 0 && (
-                  <div className="mt-4 pt-4 border-t">
-                    <p className="text-xs text-muted-foreground">
-                      Target Audience: {notice.targetAudience.map(a =>
-                        a.charAt(0).toUpperCase() + a.slice(1)
-                      ).join(', ')}
+
+                  <div className="space-y-2">
+                    <h3 className="text-base font-bold text-foreground leading-snug line-clamp-2">
+                      {n.title}
+                    </h3>
+                    <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
+                      {n.content}
                     </p>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+
+                <div className="p-6 pt-0 border-t border-border/50 flex items-center justify-between mt-4">
+                  <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-semibold">
+                    <User className="h-3 w-3" />
+                    {authorName}
+                  </span>
+                  <Button
+                    onClick={() => setReaderNotice(n)}
+                    variant="ghost"
+                    size="sm"
+                    className="text-primary text-xs hover:bg-primary/5 font-semibold h-8 rounded-lg px-2"
+                  >
+                    <Eye className="mr-1.5 h-3.5 w-3.5" />
+                    Read More
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
         </div>
+      )}
+
+      {/* Reader Dialog Modal */}
+      {readerNotice && (
+        <Dialog open={!!readerNotice} onOpenChange={(open) => !open && setReaderNotice(null)}>
+          <DialogContent className="sm:max-w-[550px] rounded-xl bg-card border-border">
+            <DialogHeader>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <StatusBadge status={readerNotice.priority === "urgent" ? "rejected" : readerNotice.priority === "high" ? "warning" : "general"} />
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {new Date(readerNotice.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+              <DialogTitle className="text-xl font-bold text-foreground leading-tight">
+                {readerNotice.title}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground flex items-center gap-1 mt-1.5 font-semibold">
+                <User className="h-3.5 w-3.5" />
+                Published by: {readerNotice.createdBy ? `${readerNotice.createdBy.firstName} ${readerNotice.createdBy.lastName}` : "Warden Administration"}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="my-6 max-h-[300px] overflow-y-auto pr-2">
+              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                {readerNotice.content}
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button onClick={() => setReaderNotice(null)} className="rounded-lg text-xs font-semibold h-9">
+                Close Notice
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
-};
-
-export default Notices;
+}

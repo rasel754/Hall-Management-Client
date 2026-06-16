@@ -1,13 +1,17 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import React, { useState, useEffect } from "react";
+import { PageHeader } from "@/components/ui/page-header";
+import { DataTable, Column } from "@/components/ui/data-table";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { EmptyState } from "@/components/ui/empty-state";
 import { adminService } from "@/services/admin.service";
+import { useAdminStats } from "@/hooks/useAdminStats";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { CheckCircle, XCircle, Loader2, Calendar, User, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
-import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 
-interface RoomBooking {
+interface BookingItem {
   _id: string;
   studentId?: {
     firstName?: string;
@@ -17,6 +21,7 @@ interface RoomBooking {
   };
   roomId?: {
     roomNumber?: string;
+    number?: string;
     floor?: number;
   };
   hallId?: {
@@ -24,191 +29,223 @@ interface RoomBooking {
   };
   status: string;
   startDate?: string;
-  requestDate?: string;
   createdAt?: string;
 }
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+export default function RoomApprovals() {
+  const { bookings, isLoadingBookings, refetchBookings, approveBooking, rejectBooking } = useAdminStats();
 
-const RoomApprovals = () => {
-  const [bookings, setBookings] = useState<RoomBooking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [approvingId, setApprovingId] = useState<string | null>(null);
-  const [bookingToApprove, setBookingToApprove] = useState<{ id: string; name: string } | null>(null);
+  const [selectedRows, setSelectedRows] = useState<BookingItem[]>([]);
+  
+  // Modals state
+  const [modalType, setModalType] = useState<"approve" | "reject" | null>(null);
+  const [singleTarget, setSingleTarget] = useState<BookingItem | null>(null);
+  const [processing, setProcessing] = useState(false);
 
-  useEffect(() => {
-    loadRooms();
-  }, []);
+  const handleActionClick = (item: BookingItem, type: "approve" | "reject") => {
+    setSingleTarget(item);
+    setModalType(type);
+  };
 
-  const loadRooms = async () => {
+  const handleBulkActionClick = (type: "approve" | "reject") => {
+    setSingleTarget(null);
+    setModalType(type);
+  };
+
+  const handleConfirmDecision = async () => {
+    setProcessing(true);
     try {
-      const response = await adminService.getRoomBookings();
-
-
-      let bookingsData: RoomBooking[] = [];
-
-      // Handle various response structures
-      if (response?.data?.bookings && Array.isArray(response.data.bookings)) {
-        bookingsData = response.data.bookings;
-      } else if (Array.isArray(response?.data)) {
-        bookingsData = response.data;
-      } else if (Array.isArray(response)) {
-        bookingsData = response;
+      if (singleTarget) {
+        // Single row decision
+        if (modalType === "approve") {
+          await approveBooking(singleTarget._id);
+        } else {
+          await rejectBooking(singleTarget._id);
+        }
+      } else {
+        // Bulk actions
+        const promises = selectedRows.map((row) =>
+          modalType === "approve"
+            ? adminService.approveRoomBooking(row._id)
+            : adminService.rejectRoomBooking(row._id)
+        );
+        await Promise.all(promises);
+        toast.success(`Bulk decision applied to ${selectedRows.length} requests!`);
+        refetchBookings();
+        setSelectedRows([]);
       }
-
-      setBookings(bookingsData);
-    } catch (error: any) {
-      console.error('Error loading rooms:', error);
-      toast.error(error.response?.data?.message || "Failed to load room bookings");
+      setModalType(null);
+      setSingleTarget(null);
+    } catch (err) {
+      console.error(err);
+      toast.error((err as any).response?.data?.message || "Failed to execute booking status change.");
     } finally {
-      setLoading(false);
+      setProcessing(false);
     }
   };
 
-  const initiateApprove = (bookingId: string, studentName: string) => {
-    setBookingToApprove({ id: bookingId, name: studentName });
-  };
+  const columns: Column<BookingItem>[] = [
+    {
+      header: "Student Profile",
+      cell: (row) => {
+        const name = row.studentId
+          ? `${row.studentId.firstName} ${row.studentId.lastName}`
+          : "Unknown Student";
+        return (
+          <div className="space-y-0.5">
+            <div className="font-bold text-foreground flex items-center gap-1.5">
+              <User className="h-3.5 w-3.5 text-primary" />
+              {name}
+            </div>
+            <div className="text-[10px] text-muted-foreground">{row.studentId?.email}</div>
+          </div>
+        );
+      },
+    },
+    {
+      header: "Requested Seat",
+      cell: (row) => (
+        <div className="space-y-0.5">
+          <div className="font-semibold text-foreground">
+            Room {row.roomId?.roomNumber || row.roomId?.number || "Requested"}
+          </div>
+          <div className="text-[10px] text-muted-foreground">{row.hallId?.name || "Student Hall"}</div>
+        </div>
+      ),
+    },
+    {
+      header: "Requested Date",
+      cell: (row) => (
+        <span className="text-xs text-muted-foreground flex items-center gap-1">
+          <Calendar className="h-3.5 w-3.5" />
+          {new Date(row.startDate || row.createdAt || Date.now()).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      header: "Status",
+      accessorKey: "status",
+      cell: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      header: "Approvals Actions",
+      cell: (row) => {
+        if (row.status !== "pending") return null;
+        return (
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => handleActionClick(row, "approve")}
+              size="sm"
+              className="h-8 rounded-lg text-xs font-semibold px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1"
+            >
+              <CheckCircle className="h-3.5 w-3.5" />
+              Approve
+            </Button>
+            <Button
+              onClick={() => handleActionClick(row, "reject")}
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-lg text-xs font-semibold px-2.5 border-destructive/20 hover:bg-destructive/10 text-destructive flex items-center gap-1"
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              Reject
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
 
-  const handleApprove = async () => {
-    if (!bookingToApprove) return;
-
-    setApprovingId(bookingToApprove.id);
-    try {
-      const response = await adminService.approveRoomBooking(bookingToApprove.id);
-      if (response.success) {
-        toast.success(`Booking approved${bookingToApprove.name ? ` for ${bookingToApprove.name}` : ""}`, {
-          description: response.message || "The student will be notified via email.",
-        });
-        loadRooms();
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to approve booking");
-    } finally {
-      setApprovingId(null);
-      setBookingToApprove(null);
-    }
-  };
-
-  const pendingBookings = bookings.filter((b) => b.status === "pending" || b.status === "Pending");
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const filterOptions = [
+    { label: "Pending Requests", value: "pending" },
+    { label: "Approved Bookings", value: "approved" },
+    { label: "Rejected Requests", value: "rejected" },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Room Approvals</h1>
-        <p className="text-muted-foreground mt-2">Review and manage room booking requests</p>
-      </div>
+    <div className="space-y-6 animate-fade-in">
+      <PageHeader
+        title="Room Approvals"
+        subtitle="Review, approve, or reject student residence hall seat applications."
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pending Requests ({pendingBookings.length})</CardTitle>
-          <CardDescription>Approve or reject room booking applications</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {pendingBookings.length === 0 ? (
-            <div className="text-center py-12">
-              <CheckCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-xl font-semibold mb-2">No Pending Requests</h3>
-              <p className="text-muted-foreground">All room booking requests have been processed.</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Student Name</TableHead>
-                  <TableHead>Room</TableHead>
-                  <TableHead>Request Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pendingBookings.map((booking) => {
-                  const bookingId = booking._id;
-                  const isApproving = approvingId === bookingId;
-                  const studentName = booking.studentId ? `${booking.studentId.firstName} ${booking.studentId.lastName}` : "Unknown Student";
-                  const roomNumber = booking.roomId?.roomNumber || "N/A";
+      {isLoadingBookings ? (
+        <Card className="p-12"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" /></Card>
+      ) : bookings.length === 0 ? (
+        <EmptyState
+          icon={ShieldAlert}
+          title="No booking requests queued"
+          description="There are currently no room booking requests logged in the database."
+        />
+      ) : (
+        <Card className="border-border bg-card shadow-md rounded-xl p-6">
+          <DataTable
+            columns={columns}
+            data={bookings}
+            searchKey="studentId.firstName" // Client search path
+            searchPlaceholder="Search student name..."
+            filterKey="status"
+            filterOptions={filterOptions}
+            enableSelection={true}
+            onSelectionChange={(rows) => setSelectedRows(rows.filter((r) => r.status === "pending"))}
+            bulkActions={
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => handleBulkActionClick("approve")}
+                  size="sm"
+                  className="h-7 text-[10px] rounded-md bg-emerald-600 hover:bg-emerald-700 font-semibold text-white"
+                >
+                  Approve Selected
+                </Button>
+                <Button
+                  onClick={() => handleBulkActionClick("reject")}
+                  variant="destructive"
+                  size="sm"
+                  className="h-7 text-[10px] rounded-md font-semibold"
+                >
+                  Reject Selected
+                </Button>
+              </div>
+            }
+            paginated={true}
+            pageSize={10}
+          />
+        </Card>
+      )}
 
-                  return (
-                    <TableRow key={bookingId}>
-                      <TableCell className="font-medium">
-                        <div>{studentName}</div>
-                        <div className="text-xs text-muted-foreground">{booking.studentId?.email}</div>
-                      </TableCell>
-                      <TableCell>Room {roomNumber}</TableCell>
-                      <TableCell>
-                        {booking.startDate
-                          ? new Date(booking.startDate).toLocaleDateString()
-                          : booking.createdAt
-                            ? new Date(booking.createdAt).toLocaleDateString()
-                            : "N/A"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{booking.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          onClick={() => initiateApprove(bookingId, studentName)}
-                          disabled={isApproving}
-                        >
-                          {isApproving ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                              Approving...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Approve
-                            </>
-                          )}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      <AlertDialog open={!!bookingToApprove} onOpenChange={(open) => !open && setBookingToApprove(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Approve Booking Request?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will approve the room booking for <span className="font-medium text-foreground">{bookingToApprove?.name}</span>.
-              The student will be notified and the room status will be updated.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleApprove} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              Confirm Approval
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Decision confirmation modal */}
+      {modalType && (
+        <ConfirmModal
+          title={
+            modalType === "approve"
+              ? singleTarget
+                ? "Approve Seat Reservation?"
+                : `Approve ${selectedRows.length} Seat Reservations?`
+              : singleTarget
+              ? "Reject Seat Reservation?"
+              : `Reject ${selectedRows.length} Seat Reservations?`
+          }
+          message={
+            modalType === "approve"
+              ? singleTarget
+                ? "Are you sure you want to approve this seat allocation request? The student will be assigned to the room."
+                : `Are you sure you want to approve all ${selectedRows.length} selected seat requests?`
+              : singleTarget
+              ? "Are you sure you want to reject this request? The student will be notified of the decision."
+              : `Are you sure you want to reject all ${selectedRows.length} selected requests?`
+          }
+          isOpen={!!modalType}
+          onClose={() => {
+            setModalType(null);
+            setSingleTarget(null);
+          }}
+          onConfirm={handleConfirmDecision}
+          confirmText={modalType === "approve" ? "Confirm Approval" : "Confirm Rejection"}
+          cancelText="Cancel"
+          isDestructive={modalType === "reject"}
+          isLoading={processing}
+        />
+      )}
     </div>
   );
-};
-
-export default RoomApprovals;
+}

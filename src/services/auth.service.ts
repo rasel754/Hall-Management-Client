@@ -7,14 +7,13 @@ export interface LoginRequest {
 }
 
 export interface RegisterRequest {
-  firstName: string;
-  lastName: string;
+  name: string;
   email: string;
   password: string;
-  studentId?: string;
-  phoneNumber?: string;
-  address?: string;
-  role?: Role;
+  studentId: string;
+  department: string;
+  year: number;
+  phone: string;
 }
 
 export interface AuthResponse {

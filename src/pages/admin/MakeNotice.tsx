@@ -1,420 +1,385 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useEffect, useState, useMemo } from "react";
+import { PageHeader } from "@/components/ui/page-header";
+import { DataTable, Column } from "@/components/ui/data-table";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { EmptyState } from "@/components/ui/empty-state";
+import { adminService } from "@/services/admin.service";
+import { Notice } from "@/services/student.service";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { adminService } from "@/services/admin.service";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Bell, Plus, Edit, Trash2, Loader2, Calendar, User, Eye } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { toast } from "sonner";
-import { Send, Loader2, AlertCircle, Plus, Pencil, Trash2, Calendar, ClipboardList } from "lucide-react";
 
-interface Notice {
-  _id: string;
-  title: string;
-  content: string;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  targetAudience: ('admin' | 'student')[];
-  createdAt: string;
-  isActive: boolean;
-}
+const noticeSchema = z.object({
+  title: z.string().min(5, "Title must be at least 5 characters"),
+  content: z.string().min(15, "Content must be at least 15 characters"),
+  priority: z.string().min(1, "Select priority rating"),
+});
 
-const MakeNotice = () => {
+type NoticeFormValues = z.infer<typeof noticeSchema>;
+
+export default function MakeNotice() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isAlertOpen, setIsAlertOpen] = useState(false);
-  const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
 
-  // Form State
-  const [formData, setFormData] = useState({
-    title: "",
-    content: "",
-    priority: "medium" as 'low' | 'medium' | 'high' | 'urgent',
-    targetAudience: ['student'] as ('admin' | 'student')[],
+  // Modal controls
+  const [noticeModalOpen, setRoomModalOpen] = useState(false);
+  const [editNoticeTarget, setEditNoticeTarget] = useState<Notice | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [processing, setProcessing] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<NoticeFormValues>({
+    resolver: zodResolver(noticeSchema),
   });
 
-  useEffect(() => {
-    fetchNotices();
-  }, []);
+  const watchedTitle = watch("title") || "Untitled Notice";
+  const watchedContent = watch("content") || "No content written yet...";
+  const watchedPriority = watch("priority") || "low";
 
   const fetchNotices = async () => {
     try {
-      setLoading(true);
-      const response = await adminService.getAllNotices();
-
-
-      let noticesData: Notice[] = [];
-
-      // Handle various response structures
-      if (Array.isArray(response)) {
-        noticesData = response;
-      } else if (response && Array.isArray(response.data)) {
-        noticesData = response.data;
-      } else if (response?.data && Array.isArray(response.data.data)) {
-        noticesData = response.data.data;
-      } else if (response?.data && Array.isArray(response.data.notices)) {
-        // This matches the user's console output: { data: { notices: [] } }
-        noticesData = response.data.notices;
-      } else if (response && Array.isArray(response.notices)) {
-        noticesData = response.notices;
-      } else {
-        console.warn("Could not find array in response, defaulting to empty", response);
-      }
-
-      setNotices(noticesData || []);
-    } catch (error) {
-      console.error("Error fetching notices:", error);
-      toast.error("Failed to fetch notices");
-      setNotices([]); // Ensure array on error
+      const res = await adminService.getAllNotices();
+      setNotices(res.data || res || []);
+    } catch (err) {
+      toast.error((err as any).response?.data?.message || "Failed to load notice databases.");
     } finally {
       setLoading(false);
     }
   };
 
-  const resetForm = () => {
-    setFormData({
+  useEffect(() => {
+    fetchNotices();
+  }, []);
+
+  const handleOpenAddNotice = () => {
+    setEditNoticeTarget(null);
+    setPreviewMode(false);
+    reset({
       title: "",
       content: "",
-      priority: "medium",
-      targetAudience: ['student']
+      priority: "low",
     });
-    setSelectedNotice(null);
+    setRoomModalOpen(true);
   };
 
-  const handleOpenCreate = () => {
-    resetForm();
-    setIsDialogOpen(true);
-  };
-
-  const handleOpenEdit = (notice: Notice) => {
-    setSelectedNotice(notice);
-    setFormData({
-      title: notice.title,
-      content: notice.content,
-      priority: notice.priority,
-      targetAudience: notice.targetAudience
+  const handleOpenEditNotice = (n: Notice) => {
+    setEditNoticeTarget(n);
+    setPreviewMode(false);
+    reset({
+      title: n.title,
+      content: n.content,
+      priority: n.priority || "low",
     });
-    setIsDialogOpen(true);
+    setRoomModalOpen(true);
   };
 
-  const handleOpenDelete = (notice: Notice) => {
-    setSelectedNotice(notice);
-    setIsAlertOpen(true);
-  };
-
-  const handleTargetAudienceChange = (role: 'admin' | 'student', checked: boolean) => {
-    if (checked) {
-      setFormData({ ...formData, targetAudience: [...formData.targetAudience, role] });
-    } else {
-      setFormData({ ...formData, targetAudience: formData.targetAudience.filter(r => r !== role) });
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.title || !formData.content) {
-      toast.error("Missing Required Fields", {
-        description: "Please fill in both title and content.",
-        icon: <AlertCircle className="h-4 w-4" />,
-      });
-      return;
-    }
-
-    if (formData.targetAudience.length === 0) {
-      toast.error("Select Target Audience", {
-        description: "Please select at least one target audience.",
-        icon: <AlertCircle className="h-4 w-4" />,
-      });
-      return;
-    }
-
-    setSubmitting(true);
-
+  const handleConfirmNoticeSave = async (data: NoticeFormValues) => {
+    setProcessing(true);
     try {
-      let response;
-      if (selectedNotice) {
-        // Update existing notice
-        response = await adminService.updateNotice(selectedNotice._id, formData);
-        toast.success("Notice Updated Successfully");
-      } else {
-        // Create new notice
-        response = await adminService.createNotice(formData);
-        toast.success("Notice Published Successfully! 🎉", {
-          description: `"${formData.title}" has been sent.`,
+      if (editNoticeTarget) {
+        // Edit Notice
+        await adminService.updateNotice(editNoticeTarget._id || editNoticeTarget.id || "", {
+          title: data.title,
+          content: data.content,
+          priority: data.priority,
         });
+        toast.success("Notice updated successfully!");
+      } else {
+        // Add Notice
+        await adminService.createNotice({
+          title: data.title,
+          content: data.content,
+          priority: data.priority,
+          targetAudience: ["student"],
+          isActive: true,
+        });
+        toast.success("Notice published successfully!");
       }
-
-      setIsDialogOpen(false);
+      setRoomModalOpen(false);
       fetchNotices();
-      resetForm();
-    } catch (error: any) {
-      console.error('Notice operation error:', error);
-      const errorMessage = error.response?.data?.message || "An error occurred.";
-      toast.error(selectedNotice ? "Failed to Update Notice" : "Failed to Publish Notice", {
-        description: errorMessage,
-      });
+    } catch (err) {
+      toast.error((err as any).response?.data?.message || "Failed to publish notice circular.");
     } finally {
-      setSubmitting(false);
+      setProcessing(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedNotice) return;
+  const handleDeleteClick = (id: string) => {
+    setDeleteTargetId(id);
+  };
 
+  const handleConfirmNoticeDelete = async () => {
+    if (!deleteTargetId) return;
+    setProcessing(true);
     try {
-      await adminService.deleteNotice(selectedNotice._id);
-      toast.success("Notice Deleted Successfully");
-      setNotices(notices.filter(n => n._id !== selectedNotice._id));
-      setIsAlertOpen(false);
-      setSelectedNotice(null);
-    } catch (error) {
-      console.error("Error deleting notice:", error);
-      toast.error("Failed to delete notice");
+      await adminService.deleteNotice(deleteTargetId);
+      toast.success("Notice deleted successfully.");
+      setDeleteTargetId(null);
+      fetchNotices();
+    } catch (err) {
+      toast.error((err as any).response?.data?.message || "Failed to delete notice.");
+    } finally {
+      setProcessing(false);
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'urgent': return 'text-red-600 bg-red-100 border-red-200';
-      case 'high': return 'text-orange-600 bg-orange-100 border-orange-200';
-      case 'medium': return 'text-blue-600 bg-blue-100 border-blue-200';
-      case 'low': return 'text-gray-600 bg-gray-100 border-gray-200';
-      default: return 'text-gray-600 bg-gray-100 border-gray-200';
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
+  const columns: Column<Notice>[] = [
+    {
+      header: "Notice Title",
+      accessorKey: "title",
+      cell: (row) => <span className="font-bold text-foreground line-clamp-1">{row.title}</span>,
+    },
+    {
+      header: "Priority Type",
+      accessorKey: "priority",
+      cell: (row) => <StatusBadge status={row.priority === "urgent" ? "rejected" : row.priority === "high" ? "warning" : "general"} />,
+    },
+    {
+      header: "Date Published",
+      accessorKey: "createdAt",
+      cell: (row) => (
+        <span className="text-xs text-muted-foreground flex items-center gap-1">
+          <Calendar className="h-3.5 w-3.5" />
+          {new Date(row.createdAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      header: "Creator",
+      cell: (row) => (
+        <span className="text-xs text-muted-foreground flex items-center gap-1">
+          <User className="h-3.5 w-3.5" />
+          {row.createdBy ? `${row.createdBy.firstName} ${row.createdBy.lastName}` : "Warden Admin"}
+        </span>
+      ),
+    },
+    {
+      header: "Actions",
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => handleOpenEditNotice(row)}
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-primary hover:bg-primary/5 rounded-md"
+            title="Edit Notice"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={() => handleDeleteClick(row._id || row.id || "")}
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-md"
+            title="Delete Notice"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Notice Board</h1>
-          <p className="text-muted-foreground mt-2">Manage announcements for students and staff</p>
-        </div>
-        <Button onClick={handleOpenCreate} className="gap-2">
-          <Plus className="h-4 w-4" /> Create Notice
-        </Button>
-      </div>
+    <div className="space-y-6 animate-fade-in">
+      <PageHeader
+        title="Make Notices"
+        subtitle="Manage academic circulars, emergency announcements, and general news postings."
+        action={
+          <Button onClick={handleOpenAddNotice} className="rounded-lg h-10 px-4 font-semibold flex items-center gap-1.5">
+            <Plus className="h-4 w-4" />
+            Publish Notice
+          </Button>
+        }
+      />
 
       {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <Card className="p-12"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" /></Card>
       ) : notices.length === 0 ? (
-        <Card className="flex flex-col items-center justify-center p-12 text-center border-dashed">
-          <div className="bg-muted/50 p-4 rounded-full mb-4">
-            <ClipboardList className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">No Notices Yet</h3>
-          <p className="text-muted-foreground mb-6 max-w-sm">
-            Create your first notice to communicate with students and staff members.
-          </p>
-          <Button onClick={handleOpenCreate}>Create Notice</Button>
-        </Card>
+        <EmptyState
+          icon={Bell}
+          title="No notices published"
+          description="There are currently no notice circulars logged in the system catalog database."
+          action={
+            <Button onClick={handleOpenAddNotice} className="rounded-lg">
+              Publish Notice
+            </Button>
+          }
+        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {notices.map((notice) => (
-            <Card key={notice._id} className="flex flex-col overflow-hidden transition-all hover:shadow-md">
-              <div className={`h-1.5 w-full ${notice.priority === 'urgent' ? 'bg-red-500' :
-                notice.priority === 'high' ? 'bg-orange-500' :
-                  notice.priority === 'medium' ? 'bg-blue-500' : 'bg-gray-400'
-                }`} />
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start gap-4">
-                  <div className="space-y-1">
-                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${getPriorityColor(notice.priority)}`}>
-                      {notice.priority}
-                    </span>
-                    <CardTitle className="leading-tight pt-2 line-clamp-2" title={notice.title}>
-                      {notice.title}
-                    </CardTitle>
-                  </div>
-                </div>
-                <CardDescription className="flex items-center gap-2 text-xs pt-1">
-                  <Calendar className="h-3 w-3" />
-                  {formatDate(notice.createdAt)}
-                  <span className="mx-1">•</span>
-                  Target: {notice.targetAudience.join(', ')}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 pb-4">
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap max-h-[200px] overflow-y-auto pr-2">
-                  {notice.content}
-                </p>
-              </CardContent>
-              <div className="flex items-center gap-2 p-4 pt-0 mt-auto border-t bg-muted/20 px-6 py-3">
-                <Button variant="ghost" size="sm" className="flex-1 h-8 text-muted-foreground hover:text-primary" onClick={() => handleOpenEdit(notice)}>
-                  <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
-                </Button>
-                <div className="w-[1px] h-4 bg-border"></div>
-                <Button variant="ghost" size="sm" className="flex-1 h-8 text-muted-foreground hover:text-red-600" onClick={() => handleOpenDelete(notice)}>
-                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Card className="border-border bg-card shadow-md rounded-xl p-6">
+          <DataTable
+            columns={columns}
+            data={notices}
+            searchKey="title"
+            searchPlaceholder="Search notices by title..."
+            paginated={true}
+            pageSize={10}
+          />
+        </Card>
       )}
 
-      {/* Create/Edit Modal */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{selectedNotice ? "Edit Notice" : "Create New Notice"}</DialogTitle>
-            <DialogDescription>
-              {selectedNotice ? "Update the details of the notice below." : "Fill in the details to publish a new notice."}
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmit} className="space-y-6 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="title">Notice Title *</Label>
-              <Input
-                id="title"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Enter a clear and concise title"
-                required
-                disabled={submitting}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="content">Notice Content *</Label>
-              <Textarea
-                id="content"
-                value={formData.content}
-                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                placeholder="Provide detailed information..."
-                rows={6}
-                required
-                disabled={submitting}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="priority">Priority Level *</Label>
-                <Select
-                  value={formData.priority}
-                  onValueChange={(value: 'low' | 'medium' | 'high' | 'urgent') =>
-                    setFormData({ ...formData, priority: value })
-                  }
-                  disabled={submitting}
+      {/* Notice Form & Preview Dialog Modal */}
+      {noticeModalOpen && (
+        <Dialog open={noticeModalOpen} onOpenChange={(open) => !open && setRoomModalOpen(false)}>
+          <DialogContent className="sm:max-w-[540px] rounded-xl bg-card border-border">
+            <DialogHeader>
+              <div className="flex items-center justify-between">
+                <DialogTitle className="text-lg font-bold">
+                  {editNoticeTarget ? "Edit Notice Details" : "Publish Official Notice"}
+                </DialogTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPreviewMode(!previewMode)}
+                  className="rounded-lg text-xs h-8 px-2 flex items-center gap-1 border-border bg-card"
                 >
-                  <SelectTrigger id="priority">
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <Eye className="h-3.5 w-3.5" />
+                  {previewMode ? "Edit Form" : "Live Preview"}
+                </Button>
               </div>
+              <DialogDescription className="text-xs text-muted-foreground mt-1">
+                Notice will be visible immediately to all students on notice boards.
+              </DialogDescription>
+            </DialogHeader>
 
-              <div className="space-y-2">
-                <Label>Target Audience *</Label>
-                <div className="flex flex-col space-y-2 pt-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="target-student"
-                      checked={formData.targetAudience.includes('student')}
-                      onCheckedChange={(checked) => handleTargetAudienceChange('student', checked as boolean)}
-                      disabled={submitting}
-                    />
-                    <label htmlFor="target-student" className="text-sm font-medium leading-none cursor-pointer">
-                      Students
-                    </label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="target-admin"
-                      checked={formData.targetAudience.includes('admin')}
-                      onCheckedChange={(checked) => handleTargetAudienceChange('admin', checked as boolean)}
-                      disabled={submitting}
-                    />
-                    <label htmlFor="target-admin" className="text-sm font-medium leading-none cursor-pointer">
-                      Admins
-                    </label>
-                  </div>
+            {previewMode ? (
+              /* Live Preview Mode Pane */
+              <div className="my-6 p-4 border border-dashed border-border rounded-xl bg-muted/20 space-y-4">
+                <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+                  <StatusBadge status={watchedPriority === "urgent" ? "rejected" : watchedPriority === "high" ? "warning" : "general"} />
+                  <span>Today's Date</span>
+                </div>
+                <h3 className="text-base font-bold text-foreground leading-tight">{watchedTitle}</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{watchedContent}</p>
+                <div className="pt-2 border-t border-border flex justify-end text-[10px] text-muted-foreground">
+                  <span>Authorized Administrator Warden</span>
                 </div>
               </div>
-            </div>
+            ) : (
+              /* Form Mode Pane */
+              <form onSubmit={handleSubmit(handleConfirmNoticeSave)} className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="notice-title">Notice Title</Label>
+                  <Input
+                    id="notice-title"
+                    placeholder="e.g., Annual Sports Tournament Schedule"
+                    {...register("title")}
+                    className={errors.title ? "border-destructive focus-visible:ring-destructive rounded-lg h-10" : "rounded-lg h-10"}
+                    disabled={processing}
+                    required
+                  />
+                  {errors.title && (
+                    <p className="text-xs text-destructive">{errors.title.message}</p>
+                  )}
+                </div>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={submitting}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    {selectedNotice ? "Updating..." : "Publishing..."}
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    {selectedNotice ? "Update Notice" : "Publish Notice"}
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+                <div className="space-y-2">
+                  <Label htmlFor="notice-priority">Notice Priority</Label>
+                  <Select
+                    value={watch("priority")}
+                    onValueChange={(val) => setValue("priority", val)}
+                  >
+                    <SelectTrigger id="notice-priority" className="w-full bg-card rounded-lg h-10 border-border">
+                      <SelectValue placeholder="Priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">General (Low)</SelectItem>
+                      <SelectItem value="medium">Maintenance (Medium)</SelectItem>
+                      <SelectItem value="high">Urgent Warning (High)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.priority && (
+                    <p className="text-xs text-destructive">{errors.priority.message}</p>
+                  )}
+                </div>
 
-      {/* Delete Confirmation Alert */}
-      <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the notice
-              "{selectedNotice?.title}" and remove it from everyone's view.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-              Delete Notice
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+                <div className="space-y-2">
+                  <Label htmlFor="notice-content">Circular Content</Label>
+                  <Textarea
+                    id="notice-content"
+                    placeholder="Type notice announcements details here..."
+                    rows={6}
+                    {...register("content")}
+                    className={errors.content ? "border-destructive focus-visible:ring-destructive rounded-lg" : "rounded-lg"}
+                    disabled={processing}
+                    required
+                  />
+                  {errors.content && (
+                    <p className="text-xs text-destructive">{errors.content.message}</p>
+                  )}
+                </div>
+
+                <DialogFooter className="mt-6">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setRoomModalOpen(false)}
+                    disabled={processing}
+                    className="rounded-lg text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={processing}
+                    className="rounded-lg text-xs font-semibold px-4 flex items-center gap-1.5"
+                  >
+                    {processing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {editNoticeTarget ? "Save Changes" : "Publish Circular"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTargetId && (
+        <ConfirmModal
+          title="Delete Notice Circular"
+          message="Are you sure you want to delete this notice circular? It will delete the announcement from all student notice boards immediately."
+          isOpen={!!deleteTargetId}
+          onClose={() => setDeleteTargetId(null)}
+          onConfirm={handleConfirmNoticeDelete}
+          confirmText="Delete Notice"
+          cancelText="Cancel"
+          isDestructive={true}
+          isLoading={processing}
+        />
+      )}
     </div>
   );
-};
-
-export default MakeNotice;
+}

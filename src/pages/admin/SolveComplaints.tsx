@@ -1,220 +1,217 @@
-import { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { PageHeader } from "@/components/ui/page-header";
+import { DataTable, Column } from "@/components/ui/data-table";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { EmptyState } from "@/components/ui/empty-state";
+import { useComplaints } from "@/hooks/useComplaints";
+import { Complaint } from "@/services/student.service";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { adminService } from "@/services/admin.service";
+import { Wrench, CheckCircle, Eye, Calendar, User, ShieldAlert, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
-interface Complaint {
-  _id?: string;
-  id?: string;
-  title: string;
-  description: string;
-  status: string;
-  priority?: string;
-  category?: string;
-  studentId?: string | { firstName: string; lastName: string; email: string };
-  resolution?: string;
-  createdAt: string;
-  updatedAt?: string;
-}
+export default function SolveComplaints() {
+  const { complaints, isLoadingComplaints, resolveComplaint, isResolving } = useComplaints();
 
+  // Modals state
+  const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
+  const [resolveTarget, setResolveTarget] = useState<Complaint | null>(null);
 
-const SolveComplaints = () => {
-  // State for solving dialog
-  const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const [solvingId, setSolvingId] = useState<string | null>(null);
-  const [completing, setCompleting] = useState(false);
-
-  useEffect(() => {
-    loadComplaints();
-  }, []);
-
-  const loadComplaints = async () => {
-    setLoading(true);
+  const handleResolveConfirm = async () => {
+    if (!resolveTarget) return;
     try {
-      const response = await adminService.getAllComplaints();
-
-      if (Array.isArray(response)) {
-        setComplaints(response);
-      } else if (response.data && Array.isArray(response.data.complaints)) {
-        setComplaints(response.data.complaints);
-      } else if (response.complaints && Array.isArray(response.complaints)) {
-        setComplaints(response.complaints);
-      } else if (Array.isArray(response.data)) {
-        setComplaints(response.data);
-      } else {
-        setComplaints([]);
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to load complaints");
-    } finally {
-      setLoading(false);
+      await resolveComplaint(resolveTarget._id || resolveTarget.id || "");
+      setResolveTarget(null);
+      setSelectedComplaint(null); // Close detail dialog if open
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  const initSolve = (id: string) => {
-    setSolvingId(id);
-  };
-
-  const handleSolve = async () => {
-    if (!solvingId) return;
-
-    setCompleting(true);
-    try {
-      const response = await adminService.updateComplaintStatus(solvingId, {
-        status: "resolved"
-      });
-
-      if (response.success || response) {
-        toast.success("Complaint resolved successfully");
-        setSolvingId(null);
-        loadComplaints();
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to resolve complaint");
-    } finally {
-      setCompleting(false);
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority?.toLowerCase()) {
-      case "high": return "destructive";
-      case "medium": return "default"; // or a custom warning color
-      case "low": return "secondary";
-      default: return "outline";
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  const activeComplaints = complaints.filter(c => c.status === 'pending' || c.status === 'Pending');
-  const resolvedComplaints = complaints.filter(c => c.status === 'resolved' || c.status === 'Solved');
+  const columns: Column<Complaint>[] = [
+    {
+      header: "Student Name",
+      cell: (row) => (
+        <div className="font-bold text-foreground flex items-center gap-1.5">
+          <User className="h-3.5 w-3.5 text-primary" />
+          {row.studentId && typeof row.studentId === "object"
+            ? `${(row.studentId as any).firstName} ${(row.studentId as any).lastName}`
+            : "Student Housed"}
+        </div>
+      ),
+    },
+    {
+      header: "Complaint Title",
+      accessorKey: "title",
+      cell: (row) => <span className="font-semibold text-foreground max-w-xs truncate block">{row.title}</span>,
+    },
+    {
+      header: "Category",
+      accessorKey: "category",
+      cell: (row) => (
+        <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+          {row.category}
+        </span>
+      ),
+    },
+    {
+      header: "Date Filed",
+      accessorKey: "createdAt",
+      cell: (row) => (
+        <span className="text-xs text-muted-foreground flex items-center gap-1">
+          <Calendar className="h-3.5 w-3.5" />
+          {new Date(row.createdAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      header: "Status",
+      accessorKey: "status",
+      cell: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      header: "Resolution Actions",
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setSelectedComplaint(row)}
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-primary hover:bg-primary/5 rounded-md"
+            title="Inspect Complaint"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          {row.status === "pending" && (
+            <Button
+              onClick={() => setResolveTarget(row)}
+              size="sm"
+              className="h-8 rounded-lg text-xs font-semibold px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1"
+            >
+              <CheckCircle className="h-3.5 w-3.5" />
+              Resolve
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Solve Complaints</h1>
-        <p className="text-muted-foreground mt-2">Manage and resolve student complaints.</p>
-      </div>
+    <div className="space-y-6 animate-fade-in">
+      <PageHeader
+        title="Resolve Complaints"
+        subtitle="Review student complaints, assign technicians, and mark issues as resolved."
+      />
 
-      <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Pending Complaints ({activeComplaints.length})</CardTitle>
-            <CardDescription>Complaints requiring attention</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {activeComplaints.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No pending complaints.</div>
-            ) : (
-              activeComplaints.map(complaint => (
-                <Card key={complaint._id || complaint.id} className="border bg-card/50">
-                  <CardHeader className="pb-2">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg">{complaint.title}</CardTitle>
-                        <CardDescription>
-                          {new Date(complaint.createdAt).toLocaleDateString()} • {complaint.category}
-                        </CardDescription>
-                      </div>
-                      <Badge variant={getPriorityColor(complaint.priority) as any} className="capitalize">
-                        {complaint.priority}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm mb-4">{complaint.description}</p>
-                    {complaint.studentId && typeof complaint.studentId === 'object' && (
-                      <div className="text-xs text-muted-foreground mb-4">
-                        From: {(complaint.studentId as any).firstName} {(complaint.studentId as any).lastName} ({(complaint.studentId as any).email})
-                      </div>
-                    )}
-                    <Dialog open={solvingId === (complaint._id || complaint.id)} onOpenChange={(open) => !open && setSolvingId(null)}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" onClick={() => initSolve(complaint._id || complaint.id!)}>
-                          <CheckCircle2 className="mr-2 h-4 w-4" /> Resolve
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Confirm Resolution</DialogTitle>
-                          <DialogDescription>
-                            Are you sure you want to mark this complaint as resolved? This action cannot be undone.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter className="mt-4">
-                          <Button variant="outline" onClick={() => setSolvingId(null)}>Cancel</Button>
-                          <Button onClick={handleSolve} disabled={completing}>
-                            {completing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Confirm Resolve
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </CardContent>
+      {isLoadingComplaints ? (
+        <Card className="p-12"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" /></Card>
+      ) : complaints.length === 0 ? (
+        <EmptyState
+          icon={Wrench}
+          title="No complaints submitted"
+          description="There are currently no outstanding student complaints logged in the database."
+        />
+      ) : (
+        <Card className="border-border bg-card shadow-md rounded-xl p-6">
+          <DataTable
+            columns={columns}
+            data={complaints}
+            searchKey="title"
+            searchPlaceholder="Search complaint title..."
+            filterKey="status"
+            filterOptions={[
+              { label: "Pending Issues", value: "pending" },
+              { label: "Resolved Issues", value: "resolved" },
+            ]}
+            paginated={true}
+            pageSize={10}
+          />
         </Card>
+      )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Resolved Complaints ({resolvedComplaints.length})</CardTitle>
-            <CardDescription>History of resolved issues</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {resolvedComplaints.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No resolved complaints yet.</div>
-            ) : (
-              resolvedComplaints.map(complaint => (
-                <Card key={complaint._id || complaint.id} className="border bg-muted/20">
-                  <CardHeader className="pb-2">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-base text-muted-foreground line-through">{complaint.title}</CardTitle>
-                        <CardDescription>
-                          Resolved: {complaint.updatedAt ? new Date(complaint.updatedAt).toLocaleDateString() : '-'}
-                        </CardDescription>
-                      </div>
-                      <Badge variant="outline">Resolved</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {complaint.resolution && (
-                      <div className="text-sm bg-muted p-3 rounded-md border text-muted-foreground">
-                        <strong>Resolution:</strong> {complaint.resolution}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* Detail Dialog Modal */}
+      {selectedComplaint && (
+        <Dialog open={!!selectedComplaint} onOpenChange={(open) => !open && setSelectedComplaint(null)}>
+          <DialogContent className="sm:max-w-[480px] rounded-xl bg-card border-border">
+            <DialogHeader>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-semibold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                  {selectedComplaint.category}
+                </span>
+                <StatusBadge status={selectedComplaint.status} />
+              </div>
+              <DialogTitle className="text-lg font-bold text-foreground">
+                {selectedComplaint.title}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground mt-1">
+                Filed on {new Date(selectedComplaint.createdAt).toLocaleDateString()}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="my-5 space-y-4 text-sm">
+              <div className="p-4 bg-muted/20 border border-border rounded-xl">
+                <span className="text-xs font-bold text-foreground uppercase tracking-wider block mb-2">Description</span>
+                <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                  {selectedComplaint.description}
+                </p>
+              </div>
+
+              {selectedComplaint.studentId && (
+                <div className="pt-2">
+                  <span className="text-xs text-muted-foreground block">Submitted By Student</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <User className="h-4 w-4 text-primary" />
+                    <span className="font-semibold text-foreground">
+                      {typeof selectedComplaint.studentId === "object"
+                        ? `${(selectedComplaint.studentId as any).firstName} ${(selectedComplaint.studentId as any).lastName}`
+                        : "Campus Student"}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button onClick={() => setSelectedComplaint(null)} variant="ghost" className="rounded-lg text-xs h-9">
+                Close Inspector
+              </Button>
+              {selectedComplaint.status === "pending" && (
+                <Button
+                  onClick={() => setResolveTarget(selectedComplaint)}
+                  className="rounded-lg text-xs font-semibold h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  Mark as Resolved
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Resolution Confirmation Modal */}
+      {resolveTarget && (
+        <ConfirmModal
+          title="Resolve Complaint Ticket"
+          message="Are you sure you want to mark this complaint as resolved? This notifies the student and closes the ticket."
+          isOpen={!!resolveTarget}
+          onClose={() => setResolveTarget(null)}
+          onConfirm={handleResolveConfirm}
+          confirmText="Yes, Resolve Issue"
+          cancelText="Cancel"
+          isLoading={isResolving}
+        />
+      )}
     </div>
   );
-};
-
-export default SolveComplaints;
+}

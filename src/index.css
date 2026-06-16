@@ -2,112 +2,97 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    --background: 210 40% 98%; /* Slate 50 */
+    --foreground: 222 47% 11%; /* Slate 800 */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 222 47% 11%; /* Slate 800 */
 
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 221 83% 53%;
-    --primary-foreground: 0 0% 100%;
-    --primary-hover: 221 83% 45%;
+    --primary: 244 55% 41%; /* Deep Indigo #3730A3 */
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: 214 32% 91%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 161 94% 30%; /* Emerald #059669 */
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 210 40% 96.1%; /* Slate 100 */
+    --muted-foreground: 215 16% 47%; /* Slate 500 */
 
-    --accent: 25 95% 53%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 32 95% 44%; /* Amber #D97706 */
+    --accent-foreground: 210 40% 98%;
 
-    --success: 142 71% 45%;
-    --success-foreground: 0 0% 100%;
+    --success: 161 94% 30%; /* Emerald #059669 */
+    --success-foreground: 210 40% 98%;
+
+    --warning: 32 95% 44%; /* Amber #D97706 */
+    --warning-foreground: 210 40% 98%;
 
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 214 32% 91%;
+    --border: 214 32% 91%; /* Slate 200 */
     --input: 214 32% 91%;
-    --ring: 221 83% 53%;
+    --ring: 244 55% 41%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem; /* 12px for cards */
 
     --sidebar-background: 222 47% 11%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 221 83% 53%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary: 244 55% 41%;
+    --sidebar-primary-foreground: 210 40% 98%;
     --sidebar-accent: 217 33% 17%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 217 33% 17%;
-    --sidebar-ring: 221 83% 53%;
-
-    --gradient-primary: linear-gradient(135deg, hsl(221 83% 53%), hsl(242 83% 58%));
-    --gradient-hero: linear-gradient(180deg, hsl(0 0% 100%), hsl(210 40% 98%));
-    
-    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
-    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.1);
-    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.1);
-    --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.1);
-
-    --transition-fast: all 0.15s ease;
-    --transition-base: all 0.2s ease;
-    --transition-slow: all 0.3s ease;
+    --sidebar-ring: 244 55% 41%;
   }
 
   .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
+    --background: 222 47% 8%; /* Slate 900 */
+    --foreground: 210 40% 98%; /* Slate 50 */
 
-    --card: 217 33% 17%;
+    --card: 222 47% 11%; /* Slate 800 */
     --card-foreground: 210 40% 98%;
 
-    --popover: 217 33% 17%;
+    --popover: 222 47% 11%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 221 83% 53%;
-    --primary-foreground: 0 0% 100%;
-    --primary-hover: 221 83% 58%;
+    --primary: 244 55% 55%; /* Lightened Indigo for contrast */
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: 217 33% 17%;
+    --secondary: 161 94% 38%; /* Lightened Emerald */
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 217 33% 17%; /* Slate 700 */
+    --muted-foreground: 215 20% 65%; /* Slate 400 */
 
-    --accent: 25 95% 53%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 32 95% 54%; /* Lightened Amber */
+    --accent-foreground: 222 47% 8%;
 
-    --success: 142 71% 45%;
-    --success-foreground: 0 0% 100%;
+    --success: 161 94% 38%;
+    --success-foreground: 210 40% 98%;
 
-    --destructive: 0 63% 31%;
+    --warning: 32 95% 54%;
+    --warning-foreground: 222 47% 8%;
+
+    --destructive: 0 63% 40%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217 33% 17%;
+    --border: 217 33% 17%; /* Slate 700 */
     --input: 217 33% 17%;
-    --ring: 221 83% 53%;
+    --ring: 244 55% 55%;
 
     --sidebar-background: 222 47% 8%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 221 83% 53%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary: 244 55% 55%;
+    --sidebar-primary-foreground: 210 40% 98%;
     --sidebar-accent: 217 33% 17%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 217 33% 17%;
-    --sidebar-ring: 221 83% 53%;
-
-    --gradient-primary: linear-gradient(135deg, hsl(221 83% 53%), hsl(242 83% 58%));
-    --gradient-hero: linear-gradient(180deg, hsl(222 47% 11%), hsl(217 33% 17%));
+    --sidebar-ring: 244 55% 55%;
   }
 }
 
@@ -117,6 +102,16 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground transition-colors duration-200 antialiased;
+    font-family: 'Outfit', 'Inter', sans-serif;
+  }
+
+  /* Custom glassmorphism helper */
+  .glassmorphism {
+    @apply bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-800/50;
+  }
+
+  .glassmorphism-card {
+    @apply bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50;
   }
 }

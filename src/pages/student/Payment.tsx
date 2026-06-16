@@ -1,179 +1,358 @@
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import React, { useEffect, useState, useMemo } from "react";
+import { PageHeader } from "@/components/ui/page-header";
+import { DataTable, Column } from "@/components/ui/data-table";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { studentService, Payment } from "@/services/student.service";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { CreditCard, Loader2, Download, ArrowUpRight, DollarSign, Calendar } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { toast } from "sonner";
-import { DollarSign, CreditCard, Loader2 } from "lucide-react";
 
-const PaymentPage = () => {
+import { extractErrorMessage } from "@/lib/api";
+
+const paySchema = z.object({
+  cardholderName: z.string().min(3, "Cardholder name must be at least 3 characters"),
+  cardNumber: z.string().regex(/^\d{16}$/, "Card number must be exactly 16 digits"),
+  expiryDate: z.string().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, "Expiry must be in MM/YY format"),
+  cvv: z.string().regex(/^\d{3}$/, "CVV must be exactly 3 digits"),
+});
+
+type PayFormValues = z.infer<typeof paySchema>;
+
+export default function StudentPayment() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [payingId, setPayingId] = useState<string | null>(null);
+  const [activePayment, setActivePayment] = useState<Payment | null>(null);
+  const [isProcessingPay, setIsProcessingPay] = useState(false);
 
-  useEffect(() => {
-    loadPayments();
-  }, []);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<PayFormValues>({
+    resolver: zodResolver(paySchema),
+  });
 
-  const loadPayments = async () => {
+  const fetchPayments = async () => {
     try {
-      const response = await studentService.getPayments();
-      if (response.success) {
-        setPayments(response.data || []);
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to load payments");
+      const res = await studentService.getPayments();
+      setPayments(res.data || res || []);
+    } catch (err) {
+      console.error("Failed to load payments", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const pendingPayment = payments.find((p) => p.status === "Pending");
-  const totalPaid = payments
-    .filter((p) => p.status === "Paid")
-    .reduce((sum, p) => sum + p.amount, 0);
+  useEffect(() => {
+    fetchPayments();
+  }, []);
 
-  const handlePayNow = async (paymentId: string, amount: number) => {
-    setPayingId(paymentId);
+  const handlePayClick = (payment: Payment) => {
+    setActivePayment(payment);
+    reset({
+      cardholderName: "",
+      cardNumber: "",
+      expiryDate: "",
+      cvv: "",
+    });
+  };
+
+  const handleClosePay = () => {
+    setActivePayment(null);
+  };
+
+  const handleConfirmPaySubmit = async (data: PayFormValues) => {
+    if (!activePayment) return;
+    setIsProcessingPay(true);
     try {
-      const response = await studentService.payRent(paymentId);
-      if (response.success) {
-        toast.success(`Payment of $${amount} processed successfully!`, {
-          description: response.message || "Your payment has been recorded. Thank you!",
-        });
-        loadPayments();
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to process payment");
+      await studentService.payRent(activePayment._id || activePayment.id || "");
+      toast.success(`Rent for ${activePayment.month} cleared successfully!`);
+      handleClosePay();
+      fetchPayments();
+    } catch (err) {
+      toast.error(extractErrorMessage(err));
     } finally {
-      setPayingId(null);
+      setIsProcessingPay(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Paid":
-        return "outline";
-      case "Pending":
-        return "secondary";
-      default:
-        return "secondary";
+  const handleDownloadReceipt = (payment: Payment) => {
+    try {
+      const content = `-----------------------------------\n` +
+                      `        HALLMS RENT RECEIPT        \n` +
+                      `-----------------------------------\n` +
+                      `Invoice ID: ${payment._id || payment.id}\n` +
+                      `Billing Cycle: ${payment.month}\n` +
+                      `Amount Cleared: $${payment.amount}\n` +
+                      `Status: PAID\n` +
+                      `Cleared Date: ${new Date().toLocaleDateString()}\n` +
+                      `Thank you for staying at HallMS.\n` +
+                      `-----------------------------------`;
+
+      const blob = new Blob([content], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Receipt_${payment.month}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Receipt downloaded successfully!");
+    } catch (err) {
+      toast.error("Failed to compile receipt.");
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  // Derive billing statistics
+  const { totalPaid, amountDue, nextDueMonth } = useMemo(() => {
+    let paidAcc = 0;
+    let dueAcc = 0;
+    let dueMonth = "No pending month";
+
+    payments.forEach((p) => {
+      if (p.status === "Paid") {
+        paidAcc += p.amount;
+      } else {
+        dueAcc += p.amount;
+        if (dueMonth === "No pending month") {
+          dueMonth = p.month;
+        }
+      }
+    });
+
+    return {
+      totalPaid: paidAcc,
+      amountDue: dueAcc,
+      nextDueMonth: dueMonth,
+    };
+  }, [payments]);
+
+  const columns: Column<Payment>[] = [
+    {
+      header: "Billing Cycle",
+      accessorKey: "month",
+      cell: (row) => <span className="font-semibold">{row.month}</span>,
+    },
+    {
+      header: "Amount Due",
+      accessorKey: "amount",
+      cell: (row) => <span className="text-primary font-bold">${row.amount}</span>,
+    },
+    {
+      header: "Status",
+      accessorKey: "status",
+      cell: (row) => <StatusBadge status={row.status === "Paid" ? "paid" : "pending"} />,
+    },
+    {
+      header: "Billing Action",
+      cell: (row) => {
+        if (row.status === "Paid") {
+          return (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleDownloadReceipt(row)}
+              className="h-8 rounded-lg text-xs font-semibold px-2 flex items-center gap-1 bg-card hover:bg-muted/50 border-border"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Receipt
+            </Button>
+          );
+        }
+        return (
+          <Button
+            onClick={() => handlePayClick(row)}
+            size="sm"
+            className="h-8 rounded-lg text-xs font-semibold px-3 flex items-center gap-1"
+          >
+            <CreditCard className="h-3.5 w-3.5" />
+            Pay Now
+          </Button>
+        );
+      },
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Payment</h1>
-        <p className="text-muted-foreground mt-2">Manage your hall fee payments</p>
-      </div>
+    <div className="space-y-6 animate-fade-in">
+      <PageHeader
+        title="Student Payments"
+        subtitle="Manage outstanding balances, clear monthly rent fees, and retrieve invoice transcripts."
+      />
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Paid</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+      {/* Summary indicators */}
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-3">
+        <Card className="border-border bg-card shadow-md rounded-xl">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-semibold text-muted-foreground">Total Paid</CardTitle>
+            <ArrowUpRight className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalPaid}</div>
-            <p className="text-xs text-muted-foreground">All time payments</p>
+            <div className="text-2xl font-bold text-foreground">${totalPaid}</div>
+            <p className="text-xs text-muted-foreground mt-0.5">Cleared invoices</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Amount</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
+        <Card className="border-border bg-card shadow-md rounded-xl">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-semibold text-muted-foreground">Amount Due</CardTitle>
+            <DollarSign className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${pendingPayment?.amount || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {pendingPayment ? `Due payment` : "No pending payments"}
-            </p>
+            <div className="text-2xl font-bold text-foreground">${amountDue}</div>
+            <p className="text-xs text-muted-foreground mt-0.5">Outstanding balance</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border bg-card shadow-md rounded-xl">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-semibold text-muted-foreground">Next Cycle Due</CardTitle>
+            <Calendar className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-foreground">{nextDueMonth}</div>
+            <p className="text-xs text-muted-foreground mt-0.5">Billing deadline</p>
           </CardContent>
         </Card>
       </div>
 
-      {pendingPayment && (
-        <Card className="border-primary">
-          <CardHeader>
-            <CardTitle>Pending Payment</CardTitle>
-            <CardDescription>Complete your payment</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <p className="text-sm text-muted-foreground">Amount</p>
-                <p className="text-2xl font-bold">${pendingPayment.amount}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Month</p>
-                <p className="text-lg font-semibold">{pendingPayment.month}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Status</p>
-                <p className="text-lg font-semibold">{pendingPayment.status}</p>
-              </div>
-            </div>
-            <Button
-              className="w-full"
-              onClick={() => handlePayNow(pendingPayment._id || pendingPayment.id || "", pendingPayment.amount)}
-              disabled={payingId === (pendingPayment._id || pendingPayment.id)}
-            >
-              {payingId === (pendingPayment._id || pendingPayment.id) ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                "Pay Now"
-              )}
-            </Button>
-          </CardContent>
+      {loading ? (
+        <Card className="p-12"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" /></Card>
+      ) : payments.length === 0 ? (
+        <EmptyState
+          icon={CreditCard}
+          title="No billing invoices found"
+          description="There are currently no rent logs mapped to your student housing profile."
+        />
+      ) : (
+        <Card className="border-border bg-card shadow-md rounded-xl p-6">
+          <DataTable
+            columns={columns}
+            data={payments}
+            searchKey="month"
+            searchPlaceholder="Search months..."
+            paginated={true}
+            pageSize={6}
+          />
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Payment History</CardTitle>
-          <CardDescription>View all your past transactions</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Month</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Date</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {payments.map((payment) => (
-                <TableRow key={payment._id || payment.id}>
-                  <TableCell className="font-medium">{payment.month}</TableCell>
-                  <TableCell>${payment.amount}</TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusColor(payment.status) as any}>{payment.status}</Badge>
-                  </TableCell>
-                  <TableCell>{new Date(payment.createdAt).toLocaleDateString()}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* Pay Now Simulated Modal */}
+      {activePayment && (
+        <Dialog open={!!activePayment} onOpenChange={(open) => !open && handleClosePay()}>
+          <DialogContent className="sm:max-w-[420px] rounded-xl bg-card border-border">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold">Simulated Checkout</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground mt-1">
+                Clearing rent for {activePayment.month} in the amount of ${activePayment.amount}.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleSubmit(handleConfirmPaySubmit)} className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="pay-card-name">Cardholder Name</Label>
+                <Input
+                  id="pay-card-name"
+                  placeholder="John Doe"
+                  {...register("cardholderName")}
+                  className={errors.cardholderName ? "border-destructive focus-visible:ring-destructive rounded-lg h-10" : "rounded-lg h-10"}
+                  disabled={isProcessingPay}
+                  required
+                />
+                {errors.cardholderName && (
+                  <p className="text-xs text-destructive">{errors.cardholderName.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="pay-card-number">Card Number</Label>
+                <Input
+                  id="pay-card-number"
+                  placeholder="4111222233334444"
+                  maxLength={16}
+                  {...register("cardNumber")}
+                  className={errors.cardNumber ? "border-destructive focus-visible:ring-destructive rounded-lg h-10" : "rounded-lg h-10"}
+                  disabled={isProcessingPay}
+                  required
+                />
+                {errors.cardNumber && (
+                  <p className="text-xs text-destructive">{errors.cardNumber.message}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="pay-card-expiry">Expiry Date</Label>
+                  <Input
+                    id="pay-card-expiry"
+                    placeholder="MM/YY"
+                    maxLength={5}
+                    {...register("expiryDate")}
+                    className={errors.expiryDate ? "border-destructive focus-visible:ring-destructive rounded-lg h-10" : "rounded-lg h-10"}
+                    disabled={isProcessingPay}
+                    required
+                  />
+                  {errors.expiryDate && (
+                    <p className="text-xs text-destructive">{errors.expiryDate.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="pay-card-cvv">CVV</Label>
+                  <Input
+                    id="pay-card-cvv"
+                    placeholder="123"
+                    maxLength={3}
+                    {...register("cvv")}
+                    className={errors.cvv ? "border-destructive focus-visible:ring-destructive rounded-lg h-10" : "rounded-lg h-10"}
+                    disabled={isProcessingPay}
+                    required
+                  />
+                  {errors.cvv && (
+                    <p className="text-xs text-destructive">{errors.cvv.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter className="mt-6">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handleClosePay}
+                  disabled={isProcessingPay}
+                  className="rounded-lg text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isProcessingPay}
+                  className="rounded-lg text-xs font-semibold px-4 flex items-center gap-1.5"
+                >
+                  {isProcessingPay && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Authorize Payment
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
-};
-
-export default PaymentPage;
+}

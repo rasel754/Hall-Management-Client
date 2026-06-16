@@ -1,237 +1,265 @@
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import React, { useEffect, useState, useMemo } from "react";
+import { PageHeader } from "@/components/ui/page-header";
+import { DataTable, Column } from "@/components/ui/data-table";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { EmptyState } from "@/components/ui/empty-state";
 import { adminService } from "@/services/admin.service";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Users, UserX, UserCheck, Loader2, ShieldAlert } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { toast } from "sonner";
-import { Search, Loader2 } from "lucide-react";
 
-interface Student {
-  _id?: string;
-  id?: string;
-  firstName: string; // Changed from name to firstName
-  lastName?: string; // Added optional lastName
+interface UserRecord {
+  _id: string;
+  name: string;
   email: string;
-  role: string; // Added role
-  // blocked?: boolean; // Deprecated or removed in favor of isActive
-  isActive?: boolean;
-  roomId?: string;
+  role: string;
+  blocked?: boolean;
 }
 
-const BlockUser = () => {
-  const [students, setStudents] = useState<Student[]>([]);
+const blockSchema = z.object({
+  blockReason: z.string().min(5, "Suspension reason must be at least 5 characters"),
+});
+
+type BlockFormValues = z.infer<typeof blockSchema>;
+
+export default function BlockUser() {
+  const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean;
-    studentId: string | null;
-    currentStatus: boolean; // true = active, false = inactive
-    studentName: string;
-  }>({
-    open: false,
-    studentId: null,
-    currentStatus: false,
-    studentName: "",
+
+  // Modals state
+  const [blockTarget, setBlockTarget] = useState<UserRecord | null>(null);
+  const [unblockTarget, setUnblockTarget] = useState<UserRecord | null>(null);
+  const [processing, setProcessing] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<BlockFormValues>({
+    resolver: zodResolver(blockSchema),
   });
 
-  useEffect(() => {
-    loadStudents();
-  }, []);
-
-  const loadStudents = async () => {
+  const fetchUsers = async () => {
     try {
-      // Use getAllUsers which we know works in StudentList, or robustly handle getStudents
-      const response = await adminService.getAllUsers();
-
-      let usersData: any[] = [];
-
-      // Handle various response structures (copied logic from StudentList)
-      if (response.data && Array.isArray(response.data.users)) {
-        usersData = response.data.users;
-      } else if (response.data && Array.isArray(response.data)) {
-        usersData = response.data;
-      } else if (response.users && Array.isArray(response.users)) {
-        usersData = response.users;
-      } else if (Array.isArray(response)) {
-        usersData = response;
-      }
-
-      // Filter only students
-      const studentsOnly = usersData.filter((user: any) => user.role === 'student');
-      setStudents(studentsOnly);
-
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to load students");
-      setStudents([]);
+      const res = await adminService.getAllUsers();
+      setUsers(res.data || res || []);
+    } catch (err) {
+      toast.error((err as any).response?.data?.message || "Failed to load user directories.");
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredStudents = Array.isArray(students) ? students.filter(
-    (student) =>
-      student.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  ) : [];
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
-  const initiateToggle = (studentId: string, currentStatus: boolean, studentName: string) => {
-    setConfirmDialog({
-      open: true,
-      studentId,
-      currentStatus,
-      studentName,
-    });
-  };
-
-  const handleConfirmToggle = async () => {
-    const { studentId, currentStatus, studentName } = confirmDialog;
-    if (!studentId) return;
-
-    setConfirmDialog((prev) => ({ ...prev, open: false }));
-    setTogglingId(studentId);
-
+  const handleBlockActionSubmit = async (data: BlockFormValues) => {
+    if (!blockTarget) return;
+    setProcessing(true);
     try {
-      // If currently active, we want to deactivate. If currently inactive, we activate.
-      const response = currentStatus
-        ? await adminService.deactivateUser(studentId)
-        : await adminService.activateUser(studentId);
-
-      const action = currentStatus ? "deactivated" : "activated";
-      toast.success(`${studentName} has been ${action}`, {
-        description: `Student access has been ${action}.`,
-      });
-      loadStudents();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to update user status");
+      await adminService.blockUser(blockTarget._id);
+      toast.success(`Account ${blockTarget.email} blocked successfully! Reason: ${data.blockReason}`);
+      setBlockTarget(null);
+      fetchUsers();
+    } catch (err) {
+      toast.error((err as any).response?.data?.message || "Failed to block user.");
     } finally {
-      setTogglingId(null);
+      setProcessing(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const handleConfirmUnblock = async () => {
+    if (!unblockTarget) return;
+    setProcessing(true);
+    try {
+      await adminService.activateUser(unblockTarget._id);
+      toast.success(`Account ${unblockTarget.email} activated successfully!`);
+      setUnblockTarget(null);
+      fetchUsers();
+    } catch (err) {
+      toast.error((err as any).response?.data?.message || "Failed to unblock user.");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const columns: Column<UserRecord>[] = [
+    {
+      header: "Account User",
+      accessorKey: "name",
+      cell: (row) => (
+        <div className="space-y-0.5">
+          <div className="font-bold text-foreground">{row.name}</div>
+          <div className="text-xs text-muted-foreground">{row.email}</div>
+        </div>
+      ),
+    },
+    {
+      header: "Portal Role",
+      accessorKey: "role",
+      cell: (row) => (
+        <span className="text-xs font-semibold bg-muted text-muted-foreground px-2 py-0.5 rounded-full capitalize">
+          {row.role}
+        </span>
+      ),
+    },
+    {
+      header: "Account status",
+      cell: (row) => <StatusBadge status={row.blocked ? "blocked" : "active"} />,
+    },
+    {
+      header: "Status Toggle Action",
+      cell: (row) => {
+        if (row.role === "admin") return null; // Avoid self deactivation
+        if (row.blocked) {
+          return (
+            <Button
+              onClick={() => setUnblockTarget(row)}
+              size="sm"
+              className="h-8 rounded-lg text-xs font-semibold px-3 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1"
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              Unblock Account
+            </Button>
+          );
+        }
+        return (
+          <Button
+            onClick={() => {
+              setBlockTarget(row);
+              reset({ blockReason: "" });
+            }}
+            variant="destructive"
+            size="sm"
+            className="h-8 rounded-lg text-xs font-semibold px-3 flex items-center gap-1"
+          >
+            <UserX className="h-3.5 w-3.5" />
+            Block Account
+          </Button>
+        );
+      },
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">User Management</h1>
-        <p className="text-muted-foreground mt-2">Manage student access to the system</p>
-      </div>
+    <div className="space-y-6 animate-fade-in">
+      <PageHeader
+        title="Block Accounts"
+        subtitle="Deactivate student portal access profiles for rules or payment defaults."
+      />
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Student Access Management</CardTitle>
-              <CardDescription>Control which students can access the portal</CardDescription>
-            </div>
-            <div className="relative w-72">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search students..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Room</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredStudents.map((student) => {
-                const studentId = student._id || student.id || "";
-                const isToggling = togglingId === studentId;
-                const isActive = student.isActive !== false;
-                const fullName = `${student.firstName} ${student.lastName || ''}`.trim();
+      {loading ? (
+        <Card className="p-12"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" /></Card>
+      ) : users.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No users registered"
+          description="There are currently no registration logs in the database."
+        />
+      ) : (
+        <Card className="border-border bg-card shadow-md rounded-xl p-6">
+          <DataTable
+            columns={columns}
+            data={users}
+            searchKey="name"
+            searchPlaceholder="Search accounts by name..."
+            filterKey="blocked"
+            filterOptions={[
+              { label: "Active Accounts Only", value: "false" },
+              { label: "Blocked Accounts Only", value: "true" },
+            ]}
+            paginated={true}
+            pageSize={10}
+          />
+        </Card>
+      )}
 
-                return (
-                  <TableRow key={studentId}>
-                    <TableCell className="font-medium">{fullName}</TableCell>
-                    <TableCell>{student.email}</TableCell>
-                    <TableCell>{student.roomId ? `Room ${student.roomId}` : "Not assigned"}</TableCell>
-                    <TableCell>
-                      <Badge variant={isActive ? "outline" : "destructive"}>
-                        {isActive ? "Active" : "Deactivated"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={isActive}
-                          onCheckedChange={() => initiateToggle(studentId, isActive, fullName)}
-                          disabled={isToggling}
-                        />
-                        <span className="text-sm text-muted-foreground">
-                          {isToggling ? "Updating..." : isActive ? "Active" : "Deactivated"}
-                        </span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* Block Reason Form Dialog Modal */}
+      {blockTarget && (
+        <Dialog open={!!blockTarget} onOpenChange={(open) => !open && setBlockTarget(null)}>
+          <DialogContent className="sm:max-w-[420px] rounded-xl bg-card border-border">
+            <DialogHeader>
+              <div className="flex items-center gap-2 text-destructive">
+                <ShieldAlert className="h-6 w-6" />
+                <DialogTitle className="text-lg font-bold">Block Account Access</DialogTitle>
+              </div>
+              <DialogDescription className="text-xs text-muted-foreground mt-1">
+                Suspends access for student <span className="font-semibold text-foreground">{blockTarget.email}</span>.
+              </DialogDescription>
+            </DialogHeader>
 
-      <AlertDialog
-        open={confirmDialog.open}
-        onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will {confirmDialog.currentStatus ? "deactivate" : "activate"} access for <strong>{confirmDialog.studentName}</strong>.
-              {confirmDialog.currentStatus
-                ? " They will no longer be able to log in."
-                : " They will regain access to the portal."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmToggle}
-              className={confirmDialog.currentStatus ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
-            >
-              {confirmDialog.currentStatus ? "Deactivate" : "Activate"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            <form onSubmit={handleSubmit(handleBlockActionSubmit)} className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="block-reason-input">Reason for Suspension</Label>
+                <Input
+                  id="block-reason-input"
+                  placeholder="e.g., Unpaid rent fees for consecutive 3 months"
+                  {...register("blockReason")}
+                  className={errors.blockReason ? "border-destructive focus-visible:ring-destructive rounded-lg h-10" : "rounded-lg h-10"}
+                  disabled={processing}
+                  required
+                />
+                {errors.blockReason && (
+                  <p className="text-xs text-destructive">{errors.blockReason.message}</p>
+                )}
+              </div>
+
+              <DialogFooter className="mt-6">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setBlockTarget(null)}
+                  disabled={processing}
+                  className="rounded-lg text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={processing}
+                  className="rounded-lg text-xs font-semibold px-4 flex items-center gap-1.5"
+                >
+                  {processing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Confirm Block
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Unblock Confirmation Modal */}
+      {unblockTarget && (
+        <ConfirmModal
+          title="Unblock Account Access"
+          message={`Are you sure you want to activate the account for student ${unblockTarget.name}? This will restore access to their student portal dashboard.`}
+          isOpen={!!unblockTarget}
+          onClose={() => setUnblockTarget(null)}
+          onConfirm={handleConfirmUnblock}
+          confirmText="Yes, Unblock"
+          cancelText="Cancel"
+          isDestructive={false}
+          isLoading={processing}
+        />
+      )}
     </div>
   );
-};
-
-export default BlockUser;
+}
