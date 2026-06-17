@@ -37,6 +37,7 @@ export function StatusBadge({ status = "", className }: StatusBadgeProps) {
     case "inactive":
     case "occupied":
     case "failed":
+    case "urgent":
       // Red / Destructive Theme
       badgeStyles = "bg-destructive/10 text-destructive border-destructive/20";
       break;

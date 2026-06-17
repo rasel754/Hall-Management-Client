@@ -40,15 +40,16 @@ export default function StudentNotices() {
   const filteredNotices = useMemo(() => {
     if (!selectedCategory || selectedCategory === "ALL") return notices;
     return notices.filter(
-      (n) => String(n.priority || "").toLowerCase() === selectedCategory.toLowerCase()
+      (n) => String(n.category || "").toLowerCase() === selectedCategory.toLowerCase()
     );
   }, [notices, selectedCategory]);
 
   const categories = [
     { label: "All Notices", value: "ALL" },
-    { label: "Urgent Board", value: "urgent" },
-    { label: "Maintenance", value: "medium" }, // maps to medium/low priorities in notice schemas
-    { label: "General Updates", value: "low" },
+    { label: "General Updates", value: "general" },
+    { label: "Urgent Alerts", value: "urgent" },
+    { label: "Academic Circulars", value: "academic" },
+    { label: "Maintenance Info", value: "maintenance" },
   ];
 
   return (
@@ -96,7 +97,7 @@ export default function StudentNotices() {
               >
                 <CardContent className="p-6 space-y-4">
                   <div className="flex justify-between items-center text-[10px] text-muted-foreground">
-                    <StatusBadge status={n.priority === "urgent" ? "rejected" : n.priority === "high" ? "warning" : "general"} />
+                    <StatusBadge status={n.category} />
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
                       {new Date(n.createdAt).toLocaleDateString()}
@@ -140,7 +141,7 @@ export default function StudentNotices() {
           <DialogContent className="sm:max-w-[550px] rounded-xl bg-card border-border">
             <DialogHeader>
               <div className="flex items-center gap-2 mb-2 flex-wrap">
-                <StatusBadge status={readerNotice.priority === "urgent" ? "rejected" : readerNotice.priority === "high" ? "warning" : "general"} />
+                <StatusBadge status={readerNotice.category} />
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
                   {new Date(readerNotice.createdAt).toLocaleDateString()}

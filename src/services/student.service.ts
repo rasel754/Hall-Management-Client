@@ -36,6 +36,7 @@ export interface Notice {
   id?: string;
   title: string;
   content: string;
+  category: 'general' | 'urgent' | 'academic' | 'maintenance';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   targetAudience: ('admin' | 'student')[];
   isActive: boolean;

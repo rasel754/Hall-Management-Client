@@ -34,8 +34,10 @@ import { toast } from "sonner";
 
 const noticeSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters"),
-  content: z.string().min(15, "Content must be at least 15 characters"),
-  priority: z.string().min(1, "Select priority rating"),
+  content: z.string().min(20, "Content must be at least 20 characters"),
+  category: z.enum(["general", "urgent", "academic", "maintenance"], {
+    errorMap: () => ({ message: "Select category rating" }),
+  }),
 });
 
 type NoticeFormValues = z.infer<typeof noticeSchema>;
@@ -60,11 +62,20 @@ export default function MakeNotice() {
     formState: { errors },
   } = useForm<NoticeFormValues>({
     resolver: zodResolver(noticeSchema),
+    defaultValues: {
+      title: "",
+      content: "",
+      category: "general",
+    },
   });
+
+  useEffect(() => {
+    register("category");
+  }, [register]);
 
   const watchedTitle = watch("title") || "Untitled Notice";
   const watchedContent = watch("content") || "No content written yet...";
-  const watchedPriority = watch("priority") || "low";
+  const watchedCategory = watch("category") || "general";
 
   const fetchNotices = async () => {
     try {
@@ -87,7 +98,7 @@ export default function MakeNotice() {
     reset({
       title: "",
       content: "",
-      priority: "low",
+      category: "general",
     });
     setRoomModalOpen(true);
   };
@@ -98,7 +109,7 @@ export default function MakeNotice() {
     reset({
       title: n.title,
       content: n.content,
-      priority: n.priority || "low",
+      category: n.category || "general",
     });
     setRoomModalOpen(true);
   };
@@ -111,7 +122,7 @@ export default function MakeNotice() {
         await adminService.updateNotice(editNoticeTarget._id || editNoticeTarget.id || "", {
           title: data.title,
           content: data.content,
-          priority: data.priority,
+          category: data.category,
         });
         toast.success("Notice updated successfully!");
       } else {
@@ -119,7 +130,7 @@ export default function MakeNotice() {
         await adminService.createNotice({
           title: data.title,
           content: data.content,
-          priority: data.priority,
+          category: data.category,
           targetAudience: ["student"],
           isActive: true,
         });
@@ -128,7 +139,8 @@ export default function MakeNotice() {
       setRoomModalOpen(false);
       fetchNotices();
     } catch (err) {
-      toast.error((err as any).response?.data?.message || "Failed to publish notice circular.");
+      const errorMsg = (err as any).response?.data?.message || (err as any).message || "Failed to publish notice circular.";
+      toast.error(errorMsg);
     } finally {
       setProcessing(false);
     }
@@ -160,9 +172,9 @@ export default function MakeNotice() {
       cell: (row) => <span className="font-bold text-foreground line-clamp-1">{row.title}</span>,
     },
     {
-      header: "Priority Type",
-      accessorKey: "priority",
-      cell: (row) => <StatusBadge status={row.priority === "urgent" ? "rejected" : row.priority === "high" ? "warning" : "general"} />,
+      header: "Category",
+      accessorKey: "category",
+      cell: (row) => <StatusBadge status={row.category} />,
     },
     {
       header: "Date Published",
@@ -278,7 +290,7 @@ export default function MakeNotice() {
               /* Live Preview Mode Pane */
               <div className="my-6 p-4 border border-dashed border-border rounded-xl bg-muted/20 space-y-4">
                 <div className="flex justify-between items-center text-[10px] text-muted-foreground">
-                  <StatusBadge status={watchedPriority === "urgent" ? "rejected" : watchedPriority === "high" ? "warning" : "general"} />
+                  <StatusBadge status={watchedCategory} />
                   <span>Today's Date</span>
                 </div>
                 <h3 className="text-base font-bold text-foreground leading-tight">{watchedTitle}</h3>
@@ -306,22 +318,23 @@ export default function MakeNotice() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="notice-priority">Notice Priority</Label>
+                  <Label htmlFor="notice-category">Notice Category</Label>
                   <Select
-                    value={watch("priority")}
-                    onValueChange={(val) => setValue("priority", val)}
+                    value={watch("category")}
+                    onValueChange={(val) => setValue("category", val as any)}
                   >
-                    <SelectTrigger id="notice-priority" className="w-full bg-card rounded-lg h-10 border-border">
-                      <SelectValue placeholder="Priority" />
+                    <SelectTrigger id="notice-category" className="w-full bg-card rounded-lg h-10 border-border">
+                      <SelectValue placeholder="Select Category" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">General (Low)</SelectItem>
-                      <SelectItem value="medium">Maintenance (Medium)</SelectItem>
-                      <SelectItem value="high">Urgent Warning (High)</SelectItem>
+                      <SelectItem value="general">General</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                      <SelectItem value="academic">Academic</SelectItem>
+                      <SelectItem value="maintenance">Maintenance</SelectItem>
                     </SelectContent>
                   </Select>
-                  {errors.priority && (
-                    <p className="text-xs text-destructive">{errors.priority.message}</p>
+                  {errors.category && (
+                    <p className="text-xs text-destructive">{errors.category.message}</p>
                   )}
                 </div>
 
