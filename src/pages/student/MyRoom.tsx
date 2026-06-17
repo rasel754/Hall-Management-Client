@@ -4,10 +4,11 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { studentService, Room } from "@/services/student.service";
 import { useAuthStore } from "@/store/authStore";
 import { useStudentProfile } from "@/hooks/useStudentProfile";
-import { DoorOpen, Users, Wifi, Bath, BookOpen, Loader2, Calendar, CheckCircle, ShieldAlert, Award, Grid } from "lucide-react";
+import { DoorOpen, Users, Wifi, Bath, BookOpen, Loader2, Calendar, CheckCircle, ShieldAlert, Award, Grid, ArrowRight } from "lucide-react";
 import { SkeletonCard } from "@/components/ui/skeleton-custom";
 import { toast } from "sonner";
 
@@ -208,7 +209,7 @@ export default function MyRoom() {
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Occupancy Rate</span>
                   <span className="font-semibold text-foreground">
-                    {myRoom.occupied || 2} / {myRoom.capacity || 2} Housed
+                    {myRoom.currentOccupancy || myRoom.occupied || 2} / {myRoom.capacity || 2} Housed
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-sm">

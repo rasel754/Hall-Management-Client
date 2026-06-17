@@ -447,11 +447,11 @@ export default function Landing() {
                 <CardContent className="p-5 flex-1 flex flex-col justify-between">
                   <div className="space-y-2">
                     <h3 className="text-lg font-bold text-foreground">Room {r.roomNumber || r.number}</h3>
-                    <p className="text-xs text-muted-foreground">Type: {r.type} Room</p>
+                    <p className="text-xs text-muted-foreground">Type: {r.type ? r.type.charAt(0).toUpperCase() + r.type.slice(1) : "Double"} Room</p>
                     <p className="text-xs text-muted-foreground">Capacity limit: {r.capacity} students</p>
                   </div>
                   <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-                    <span className="text-sm font-extrabold text-primary">${r.price || 2000}/mo</span>
+                    <span className="text-sm font-extrabold text-primary">${r.pricePerMonth || r.price || 2000}/mo</span>
                     <Button onClick={() => navigate(token ? "/dashboard/student/hall-booking" : "/login")} variant="outline" size="sm" className="rounded-lg text-xs">
                       View Details
                     </Button>

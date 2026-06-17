@@ -95,9 +95,10 @@ export default function AvailableRooms() {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       
       // Update room occupancy on mock state
+      const nextOccupancy = (allocationTarget.currentOccupancy || allocationTarget.occupied || 0) + 1;
       await adminService.updateRoom(allocationTarget._id || allocationTarget.id || "", {
-        occupied: (allocationTarget.occupied || 0) + 1,
-        status: (allocationTarget.occupied || 0) + 1 >= (allocationTarget.capacity || 2) ? "occupied" : "available",
+        currentOccupancy: nextOccupancy,
+        status: nextOccupancy >= (allocationTarget.capacity || 2) ? "occupied" : "available",
       });
 
       toast.success(`Student ${data.studentEmail} successfully assigned to Room ${allocationTarget.roomNumber || allocationTarget.number}!`);
@@ -151,15 +152,18 @@ export default function AvailableRooms() {
     {
       header: "Type",
       accessorKey: "type",
-      cell: (row) => <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-semibold">{row.type || "Double"}</span>,
+      cell: (row) => {
+        const typeStr = row.type ? row.type.charAt(0).toUpperCase() + row.type.slice(1) : "Double";
+        return <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-semibold">{typeStr}</span>;
+      },
     },
     {
       header: "Occupancy Cap",
-      cell: (row) => <span>{row.occupied || 0} / {row.capacity || 2} Housed</span>,
+      cell: (row) => <span>{row.currentOccupancy || row.occupied || 0} / {row.capacity || 2} Housed</span>,
     },
     {
       header: "Monthly Cost",
-      cell: (row) => <span className="font-bold text-primary">${row.price || 2200}/mo</span>,
+      cell: (row) => <span className="font-bold text-primary">${row.pricePerMonth || row.price || 2200}/mo</span>,
     },
     {
       header: "Status",
@@ -286,11 +290,11 @@ export default function AvailableRooms() {
                       <h3 className="text-base font-bold text-foreground">Room {room.roomNumber || room.number}</h3>
                       <span className="text-[10px] text-muted-foreground font-semibold">Floor {room.floor || "1"}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground">Type: {room.type || "Double"}</p>
-                    <p className="text-xs text-muted-foreground">Occupied: {room.occupied || 0} / {room.capacity || 2}</p>
+                    <p className="text-xs text-muted-foreground">Type: {room.type ? room.type.charAt(0).toUpperCase() + room.type.slice(1) : "Double"}</p>
+                    <p className="text-xs text-muted-foreground">Occupied: {room.currentOccupancy || room.occupied || 0} / {room.capacity || 2}</p>
                   </div>
                   <div className="mt-4 pt-4 border-t border-border flex flex-col gap-3">
-                    <span className="text-xs font-bold text-primary">${room.price || 2200}/mo</span>
+                    <span className="text-xs font-bold text-primary">${room.pricePerMonth || room.price || 2200}/mo</span>
                     <Button
                       onClick={() => handleOpenAssign(room)}
                       disabled={!isAvailable}

@@ -265,14 +265,14 @@ export default function HallBooking() {
                           Floor {room.floor || "1"}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground">Type: {room.type || "Double Shared"}</p>
+                      <p className="text-xs text-muted-foreground">Type: {room.type ? room.type.charAt(0).toUpperCase() + room.type.slice(1) : "Double Shared"}</p>
                       <p className="text-xs text-muted-foreground">
-                        Capacity: {room.occupied || 0} / {room.capacity || 2} Housed
+                        Capacity: {room.currentOccupancy || room.occupied || 0} / {room.capacity || 2} Housed
                       </p>
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-                      <span className="text-sm font-extrabold text-primary">${room.price || 2000}/mo</span>
+                      <span className="text-sm font-extrabold text-primary">${room.pricePerMonth || room.price || 2000}/mo</span>
                       <Button
                         onClick={() => handleOpenBooking(room)}
                         disabled={!isAvailable}
@@ -326,7 +326,7 @@ export default function HallBooking() {
             <DialogHeader>
               <DialogTitle className="text-lg font-bold">Room Seat Booking</DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-1">
-                Booking Room {activeBookingRoom.roomNumber || activeBookingRoom.number} at ${activeBookingRoom.price || 2000}/mo.
+                Booking Room {activeBookingRoom.roomNumber || activeBookingRoom.number} at ${activeBookingRoom.pricePerMonth || activeBookingRoom.price || 2000}/mo.
               </DialogDescription>
             </DialogHeader>
 

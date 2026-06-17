@@ -35,9 +35,9 @@ import { toast } from "sonner";
 const roomSchema = z.object({
   roomNumber: z.string().min(2, "Room number must be at least 2 characters"),
   floor: z.coerce.number().min(1, "Floor must be at least 1"),
-  type: z.string().min(1, "Select room type"),
+  type: z.enum(["single", "double", "triple"], { errorMap: () => ({ message: "Select room type" }) }),
   capacity: z.coerce.number().min(1, "Minimum capacity is 1"),
-  price: z.coerce.number().min(100, "Minimum monthly price is $100"),
+  pricePerMonth: z.coerce.number().min(100, "Minimum monthly price is $100"),
 });
 
 type RoomFormValues = z.infer<typeof roomSchema>;
@@ -90,9 +90,9 @@ export default function HallManagement() {
     reset({
       roomNumber: "",
       floor: 1,
-      type: "Double",
+      type: "double",
       capacity: 2,
-      price: 2200,
+      pricePerMonth: 2200,
     });
     setRoomModalOpen(true);
   };
@@ -102,9 +102,9 @@ export default function HallManagement() {
     reset({
       roomNumber: room.roomNumber || room.number || "",
       floor: Number(room.floor) || 1,
-      type: room.type || "Double",
+      type: (room.type ? room.type.toLowerCase() : "double") as any,
       capacity: room.capacity || 2,
-      price: room.price || 2200,
+      pricePerMonth: room.pricePerMonth || room.price || 2200,
     });
     setRoomModalOpen(true);
   };
@@ -119,7 +119,7 @@ export default function HallManagement() {
           floor: data.floor,
           type: data.type,
           capacity: data.capacity,
-          price: data.price,
+          pricePerMonth: data.pricePerMonth,
         });
         toast.success("Room updated successfully!");
       } else {
@@ -130,7 +130,7 @@ export default function HallManagement() {
           floor: data.floor,
           type: data.type,
           capacity: data.capacity,
-          price: data.price,
+          pricePerMonth: data.pricePerMonth,
           status: "available",
           available: true,
           hallId: activeHall._id || activeHall.id,
@@ -193,15 +193,18 @@ export default function HallManagement() {
     {
       header: "Type",
       accessorKey: "type",
-      cell: (row) => <span className="text-xs font-semibold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{row.type || "Double"}</span>,
+      cell: (row) => {
+        const typeStr = row.type ? row.type.charAt(0).toUpperCase() + row.type.slice(1) : "Double";
+        return <span className="text-xs font-semibold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{typeStr}</span>;
+      },
     },
     {
       header: "Capacity",
-      cell: (row) => <span>{row.occupied || 0} / {row.capacity || 2} Housed</span>,
+      cell: (row) => <span>{row.currentOccupancy || row.occupied || 0} / {row.capacity || 2} Housed</span>,
     },
     {
       header: "Price",
-      cell: (row) => <span className="font-bold text-primary">${row.price || 2200}/mo</span>,
+      cell: (row) => <span className="font-bold text-primary">${row.pricePerMonth || row.price || 2200}/mo</span>,
     },
     {
       header: "System Status",
@@ -354,15 +357,15 @@ export default function HallManagement() {
                   <Label htmlFor="room-type">Room Type</Label>
                   <Select
                     value={watch("type")}
-                    onValueChange={(val) => setValue("type", val)}
+                    onValueChange={(val) => setValue("type", val as any)}
                   >
                     <SelectTrigger id="room-type" className="w-full bg-card rounded-lg h-10 border-border">
                       <SelectValue placeholder="Type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Single">Single</SelectItem>
-                      <SelectItem value="Double">Double</SelectItem>
-                      <SelectItem value="Triple">Triple</SelectItem>
+                      <SelectItem value="single">Single</SelectItem>
+                      <SelectItem value="double">Double</SelectItem>
+                      <SelectItem value="triple">Triple</SelectItem>
                     </SelectContent>
                   </Select>
                   {errors.type && (
@@ -392,13 +395,13 @@ export default function HallManagement() {
                   <Input
                     id="room-price"
                     type="number"
-                    {...register("price")}
-                    className={errors.price ? "border-destructive focus-visible:ring-destructive rounded-lg h-10" : "rounded-lg h-10"}
+                    {...register("pricePerMonth")}
+                    className={errors.pricePerMonth ? "border-destructive focus-visible:ring-destructive rounded-lg h-10" : "rounded-lg h-10"}
                     disabled={processing}
                     required
                   />
-                  {errors.price && (
-                    <p className="text-xs text-destructive">{errors.price.message}</p>
+                  {errors.pricePerMonth && (
+                    <p className="text-xs text-destructive">{errors.pricePerMonth.message}</p>
                   )}
                 </div>
               </div>

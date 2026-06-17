@@ -11,6 +11,9 @@ export interface Room {
   available?: boolean;
   status?: string;
   hallId?: any;
+  type?: string;
+  price?: number;
+  pricePerMonth?: number;
 }
 
 export interface Complaint {
