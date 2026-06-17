@@ -34,23 +34,35 @@ export default function MyRoom() {
     fetchBookings();
   }, []);
 
-  const roomImages = [
-    "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=600&q=80", // Shared Dorm
-    "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=600&q=80", // Bed Study
-    "https://images.unsplash.com/photo-1618219908412-a29a1bb7b86e?auto=format&fit=crop&w=600&q=80"  // Common Room Desk
-  ];
+  const roomImages = myRoom?.images && myRoom.images.length > 0
+    ? myRoom.images
+    : [
+        "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=600&q=80", // Shared Dorm
+        "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=600&q=80", // Bed Study
+        "https://images.unsplash.com/photo-1618219908412-a29a1bb7b86e?auto=format&fit=crop&w=600&q=80"  // Common Room Desk
+      ];
 
-  const facilities = [
-    { name: "Gigabit Wifi", icon: Wifi, available: true },
-    { name: "Private Bathroom", icon: Bath, available: true },
-    { name: "Air Conditioning", icon: CheckCircle, available: true },
-    { name: "Personal Study Desk", icon: BookOpen, available: true }
-  ];
+  const getFacilityIcon = (facilityName: string) => {
+    const name = facilityName.toLowerCase();
+    if (name.includes("wifi") || name.includes("internet")) return Wifi;
+    if (name.includes("bath") || name.includes("washroom") || name.includes("toilet")) return Bath;
+    if (name.includes("ac") || name.includes("air cond")) return CheckCircle;
+    if (name.includes("desk") || name.includes("table") || name.includes("study")) return BookOpen;
+    return CheckCircle;
+  };
 
-  const mockRoommates = [
-    { name: "Alexander Hamilton", email: "a.hamilton@university.edu", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80" },
-    { name: "Marie Curie", email: "m.curie@university.edu", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80" }
-  ];
+  const facilities = myRoom?.facilities && myRoom.facilities.length > 0
+    ? myRoom.facilities.map((fac: string) => ({
+        name: fac,
+        icon: getFacilityIcon(fac),
+        available: true
+      }))
+    : [
+        { name: "Gigabit Wifi", icon: Wifi, available: true },
+        { name: "Private Bathroom", icon: Bath, available: true },
+        { name: "Air Conditioning", icon: CheckCircle, available: true },
+        { name: "Personal Study Desk", icon: BookOpen, available: true }
+      ];
 
   if (isLoadingRoom) {
     return (
@@ -147,7 +159,7 @@ export default function MyRoom() {
                       <div>
                         <span className="text-xs text-muted-foreground block">Rent Cost</span>
                         <span className="font-semibold text-primary">
-                          $2200/month
+                          ${myRoom.pricePerMonth || myRoom.price || 2200}/month
                         </span>
                       </div>
                     </div>
@@ -177,20 +189,26 @@ export default function MyRoom() {
                 <CardDescription>Contact info for students in your room allocation</CardDescription>
               </CardHeader>
               <CardContent className="divide-y divide-border">
-                {mockRoommates.map((rm) => (
-                  <div key={rm.name} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                    <Avatar className="h-10 w-10 border border-border">
-                      <AvatarImage src={rm.avatar} />
-                      <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                        {rm.name[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <h4 className="text-sm font-bold text-foreground">{rm.name}</h4>
-                      <p className="text-xs text-muted-foreground mt-0.5">{rm.email}</p>
+                {myRoom?.roommates && myRoom.roommates.length > 0 ? (
+                  myRoom.roommates.map((rm: any) => (
+                    <div key={rm._id || rm.id || rm.email} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                      <Avatar className="h-10 w-10 border border-border">
+                        <AvatarImage src={rm.avatar} />
+                        <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                          {rm.name ? rm.name[0] : "S"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h4 className="text-sm font-bold text-foreground">{rm.name}</h4>
+                        <p className="text-xs text-muted-foreground mt-0.5">{rm.email}</p>
+                      </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    No roommates assigned to this room yet.
                   </div>
-                ))}
+                )}
               </CardContent>
             </Card>
           </div>
@@ -209,12 +227,14 @@ export default function MyRoom() {
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Occupancy Rate</span>
                   <span className="font-semibold text-foreground">
-                    {myRoom.currentOccupancy || myRoom.occupied || 2} / {myRoom.capacity || 2} Housed
+                    {myRoom.currentOccupancy !== undefined ? myRoom.currentOccupancy : (myRoom.occupied || 0)} / {myRoom.capacity || 2} Housed
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Allocation Date</span>
-                  <span className="font-semibold text-foreground">June 10, 2026</span>
+                  <span className="font-semibold text-foreground">
+                    {myRoom.allocationDate ? new Date(myRoom.allocationDate).toLocaleDateString() : "N/A"}
+                  </span>
                 </div>
               </CardContent>
             </Card>

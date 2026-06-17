@@ -48,7 +48,7 @@ export default function CancelSeat() {
   });
 
   // Find the active approved booking to cancel
-  const activeBooking = bookings.find((b: any) => b.status === "approved");
+  const activeBooking = bookings.find((b: any) => b.status === "approved" || b.status === "active");
 
   const onSubmit = (data: CancelFormValues) => {
     setFormData(data);
@@ -56,10 +56,16 @@ export default function CancelSeat() {
   };
 
   const handleConfirmCancel = async () => {
-    if (!activeBooking) return;
+    if (!activeBooking || !formData) return;
     setConfirmOpen(false);
     try {
-      await cancelBooking(activeBooking._id || activeBooking.id);
+      await cancelBooking({
+        bookingId: activeBooking._id || activeBooking.id,
+        data: {
+          reason: formData.reason,
+          details: formData.details,
+        },
+      });
       toast.success("Cancellation petition submitted successfully!");
       navigate("/dashboard/student/overview");
     } catch (err) {
@@ -115,7 +121,9 @@ export default function CancelSeat() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Monthly Rent</span>
-                  <span className="font-semibold text-primary">$2200/mo</span>
+                  <span className="font-semibold text-primary">
+                    ${myRoom.pricePerMonth || myRoom.price || 2200}/mo
+                  </span>
                 </div>
               </CardContent>
             </Card>

@@ -31,7 +31,8 @@ export const useRoomBooking = () => {
   });
 
   const cancelBookingMutation = useMutation({
-    mutationFn: (bookingId: string) => studentService.cancelBooking(bookingId),
+    mutationFn: ({ bookingId, data }: { bookingId: string; data?: { reason: string; details: string } }) =>
+      studentService.cancelBooking(bookingId, data),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
       queryClient.invalidateQueries({ queryKey: ["rooms"] });

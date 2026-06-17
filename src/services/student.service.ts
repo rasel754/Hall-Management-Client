@@ -86,8 +86,8 @@ export const studentService = {
     return response.data;
   },
 
-  cancelBooking: async (bookingId: string) => {
-    const response = await api.post(`/api/bookings/${bookingId}/cancel`);
+  cancelBooking: async (bookingId: string, data?: { reason: string; details: string }) => {
+    const response = await api.post(`/api/bookings/${bookingId}/cancel`, data);
     return response.data;
   },
 
