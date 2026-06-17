@@ -303,10 +303,10 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more details.
 
 | Contact Channel | Destination Link |
 | :--- | :--- |
-| **Author** | Rasel |
-| **Portfolio** | [your-portfolio-link](https://your-portfolio-link) |
-| **LinkedIn** | [your-linkedin-url](https://your-linkedin-url) |
-| **Email** | [your-email](mailto:your-email) |
+| **Author** | Rasel Ahmed |
+| **Portfolio** | [your-portfolio-link](https://portfolio-iota-two-90.vercel.app) |
+| **LinkedIn** | [your-linkedin-url](https://www.linkedin.com/in/rasel754) |
+| **Email** | [your-email](raselahmed73614@gmail.com) |
 | **GitHub** | [rasel754](https://github.com/rasel754) |
 
 ---
