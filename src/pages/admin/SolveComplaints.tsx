@@ -20,7 +20,7 @@ import { Wrench, CheckCircle, Eye, Calendar, User, ShieldAlert, Loader2 } from "
 import { toast } from "sonner";
 
 export default function SolveComplaints() {
-  const { complaints, isLoadingComplaints, resolveComplaint, isResolving } = useComplaints();
+  const { complaints, isLoadingComplaints, resolveComplaintAsync, isResolving } = useComplaints();
 
   const normalizedComplaints = React.useMemo(() => {
     return complaints.map((c: any) => {
@@ -43,7 +43,7 @@ export default function SolveComplaints() {
   const handleResolveConfirm = async () => {
     if (!resolveTarget) return;
     try {
-      await resolveComplaint(resolveTarget._id || resolveTarget.id || "");
+      await resolveComplaintAsync(resolveTarget._id || resolveTarget.id || "");
       setResolveTarget(null);
       setSelectedComplaint(null); // Close detail dialog if open
     } catch (err) {

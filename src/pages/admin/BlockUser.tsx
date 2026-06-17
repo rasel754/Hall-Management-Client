@@ -74,8 +74,8 @@ export default function BlockUser() {
     if (!blockTarget) return;
     setProcessing(true);
     try {
-      await adminService.blockUser(blockTarget._id);
-      toast.success(`Account ${blockTarget.email} blocked successfully! Reason: ${data.blockReason}`);
+      await adminService.blockUser(blockTarget._id, data.blockReason);
+      toast.success(`Account ${blockTarget.email} blocked successfully.`);
       setBlockTarget(null);
       fetchUsers();
     } catch (err) {

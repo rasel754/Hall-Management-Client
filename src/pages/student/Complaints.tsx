@@ -35,7 +35,7 @@ import { toast } from "sonner";
 const complaintSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters"),
   category: z.string().min(1, "Please select a category"),
-  description: z.string().min(15, "Please describe the complaint in at least 15 characters"),
+  description: z.string().min(20, "Please describe the complaint in at least 20 characters"),
 });
 
 type ComplaintFormValues = z.infer<typeof complaintSchema>;
@@ -227,11 +227,11 @@ export default function StudentComplaints() {
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Maintenance">Maintenance & Repairs</SelectItem>
-                    <SelectItem value="Cleaning">Cleaning & Janitorial</SelectItem>
-                    <SelectItem value="Security">Security & Safety</SelectItem>
-                    <SelectItem value="WiFi">WiFi & Internet</SelectItem>
-                    <SelectItem value="Other">Other Issues</SelectItem>
+                    <SelectItem value="maintenance">Maintenance & Repairs</SelectItem>
+                    <SelectItem value="cleanliness">Cleaning & Janitorial</SelectItem>
+                    <SelectItem value="security">Security & Safety</SelectItem>
+                    <SelectItem value="noise">Noise & Disturbance</SelectItem>
+                    <SelectItem value="other">Other Issues</SelectItem>
                   </SelectContent>
                 </Select>
                 {errors.category && (

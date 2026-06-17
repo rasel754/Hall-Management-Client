@@ -130,8 +130,8 @@ export const adminService = {
     return response.data;
   },
 
-  blockUser: async (userId: string) => {
-    const response = await api.patch(`/api/admin/block-user/${userId}`);
+  blockUser: async (userId: string, reason?: string) => {
+    const response = await api.patch(`/api/admin/block-user/${userId}`, { reason: reason || "Administrative suspension" });
     return response.data;
   },
 
@@ -162,7 +162,7 @@ export const adminService = {
   },
 
   solveComplaint: async (complaintId: string) => {
-    const response = await api.patch(`/api/admin/solve-complaint/${complaintId}`);
+    const response = await api.patch(`/api/admin/solve-complaint/${complaintId}`, { status: "resolved" });
     return response.data;
   },
 
