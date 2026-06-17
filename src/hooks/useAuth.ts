@@ -29,10 +29,8 @@ export const useAuth = () => {
     mutationFn: (data: RegisterRequest) => authService.register(data),
     onSuccess: (response) => {
       if (response.success) {
-        const { token: tokenData, user: userData } = response.data;
-        setAuth(tokenData, userData);
-        toast.success("Registration successful! Welcome to HallMS.");
-        navigate(userData.role === "student" ? "/dashboard/student/overview" : "/dashboard/admin/overview");
+        toast.success("Registration successful! Please login with your credentials.");
+        navigate("/login");
       }
     },
     onError: (error: any) => {

@@ -93,8 +93,31 @@ export default function AdminOverview() {
   const activeComplaintsCount = stats?.pendingComplaints || 4;
   const monthlyRevenue = occupiedRooms * 2200; // Simulated pricing
   const blockedUsersCount = stats?.blockedUsers || 3;
+  const recentApprovals = React.useMemo(() => {
+    return bookings.slice(0, 4).map((b: any) => {
+      const studentObj = b.student || b.studentId;
+      const roomObj = b.room || b.roomId;
+      const hallObj = b.hall || b.hallId;
 
-  const recentApprovals = bookings.slice(0, 4);
+      return {
+        ...b,
+        studentId: studentObj ? {
+          ...studentObj,
+          firstName: studentObj.firstName || studentObj.name?.split(" ")[0] || "Student",
+          lastName: studentObj.lastName || studentObj.name?.split(" ").slice(1).join(" ") || "",
+        } : undefined,
+        roomId: roomObj ? {
+          ...roomObj,
+          roomNumber: roomObj.roomNumber || roomObj.number,
+        } : undefined,
+        hallId: hallObj ? {
+          ...hallObj,
+          name: hallObj.name,
+        } : undefined,
+        startDate: b.startDate || b.moveInDate,
+      };
+    });
+  }, [bookings]);
 
   return (
     <div className="space-y-6 animate-fade-in">

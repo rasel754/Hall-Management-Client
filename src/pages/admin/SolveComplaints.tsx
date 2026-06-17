@@ -22,6 +22,20 @@ import { toast } from "sonner";
 export default function SolveComplaints() {
   const { complaints, isLoadingComplaints, resolveComplaint, isResolving } = useComplaints();
 
+  const normalizedComplaints = React.useMemo(() => {
+    return complaints.map((c: any) => {
+      const studentObj = c.student || c.studentId;
+      return {
+        ...c,
+        studentId: studentObj ? {
+          ...studentObj,
+          firstName: studentObj.firstName || studentObj.name?.split(" ")[0] || "Student",
+          lastName: studentObj.lastName || studentObj.name?.split(" ").slice(1).join(" ") || "",
+        } : undefined,
+      };
+    });
+  }, [complaints]);
+
   // Modals state
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
   const [resolveTarget, setResolveTarget] = useState<Complaint | null>(null);
@@ -125,7 +139,7 @@ export default function SolveComplaints() {
         <Card className="border-border bg-card shadow-md rounded-xl p-6">
           <DataTable
             columns={columns}
-            data={complaints}
+            data={normalizedComplaints}
             searchKey="title"
             searchPlaceholder="Search complaint title..."
             filterKey="status"

@@ -37,6 +37,34 @@ export default function RoomApprovals() {
 
   const [selectedRows, setSelectedRows] = useState<BookingItem[]>([]);
   
+  const normalizedBookings = React.useMemo(() => {
+    return bookings.map((b: any) => {
+      const studentObj = b.student || b.studentId;
+      const roomObj = b.room || b.roomId;
+      const hallObj = b.hall || b.hallId;
+
+      return {
+        ...b,
+        studentId: studentObj ? {
+          ...studentObj,
+          firstName: studentObj.firstName || studentObj.name?.split(" ")[0] || "Student",
+          lastName: studentObj.lastName || studentObj.name?.split(" ").slice(1).join(" ") || "",
+          email: studentObj.email,
+          studentId: studentObj.studentId,
+        } : undefined,
+        roomId: roomObj ? {
+          ...roomObj,
+          roomNumber: roomObj.roomNumber || roomObj.number,
+        } : undefined,
+        hallId: hallObj ? {
+          ...hallObj,
+          name: hallObj.name,
+        } : undefined,
+        startDate: b.startDate || b.moveInDate,
+      };
+    });
+  }, [bookings]);
+
   // Modals state
   const [modalType, setModalType] = useState<"approve" | "reject" | null>(null);
   const [singleTarget, setSingleTarget] = useState<BookingItem | null>(null);
@@ -181,7 +209,7 @@ export default function RoomApprovals() {
         <Card className="border-border bg-card shadow-md rounded-xl p-6">
           <DataTable
             columns={columns}
-            data={bookings}
+            data={normalizedBookings}
             searchKey="studentId.firstName" // Client search path
             searchPlaceholder="Search student name..."
             filterKey="status"
